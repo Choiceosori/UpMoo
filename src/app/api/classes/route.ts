@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { withApiErrorHandling } from "@/lib/apiHandler";
 
-export async function GET(req: NextRequest) {
+export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const schoolId = req.nextUrl.searchParams.get("schoolId");
   const year = req.nextUrl.searchParams.get("year");
   const semester = req.nextUrl.searchParams.get("semester");
@@ -22,10 +23,10 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ classStructures: data });
-}
+});
 
 /** 학년별 학급 수를 upsert 합니다. body: { schoolId, year, semester, grades: [{grade, classCount}] } */
-export async function POST(req: NextRequest) {
+export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const body = await req.json();
   const { schoolId, year, semester, grades } = body as {
     schoolId: string;
@@ -53,4 +54,4 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ classStructures: data });
-}
+});

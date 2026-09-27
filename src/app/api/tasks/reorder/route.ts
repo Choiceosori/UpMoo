@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { withApiErrorHandling } from "@/lib/apiHandler";
 
 /** body: { orderedTaskIds: string[] } - Drag & Drop 결과에 따른 순서 저장 */
-export async function POST(req: NextRequest) {
+export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const body = await req.json();
   const orderedTaskIds = body.orderedTaskIds as string[];
 
@@ -21,4 +22,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
+});

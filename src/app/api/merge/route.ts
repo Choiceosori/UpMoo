@@ -3,6 +3,7 @@ import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
 import { Submission } from "@/lib/types";
+import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -16,7 +17,7 @@ function labelFor(sub: Submission): string {
  * body: { taskId: string, category: "excel_general" | "excel_expense" }
  * 응답: 병합된 단일 엑셀 파일 (다운로드용 스트림)
  */
-export async function POST(req: NextRequest) {
+export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const body = await req.json();
   const { taskId, category } = body as {
     taskId: string;
@@ -90,4 +91,4 @@ export async function POST(req: NextRequest) {
       "Content-Length": String(mergedBuffer.byteLength),
     },
   });
-}
+});

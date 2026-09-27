@@ -14,17 +14,17 @@ function getSupabaseAdmin(): SupabaseClient {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    console.warn(
-      "[supabaseAdmin] SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 환경변수가 설정되지 않았습니다. " +
-        ".env.local 또는 Vercel 환경변수를 확인하세요."
+    // 실제 값이 없는 채로 클라이언트를 만들면 "TypeError: fetch failed"처럼
+    // 원인을 알기 어려운 네트워크 오류로 이어지므로, 여기서 바로 명확한 에러를 던집니다.
+    throw new Error(
+      "Supabase 환경변수(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)가 설정되지 않았습니다. " +
+        "Vercel 프로젝트의 Settings > Environment Variables에서 값을 등록한 뒤 다시 배포해주세요."
     );
   }
 
-  cachedClient = createClient(
-    supabaseUrl || "https://placeholder.supabase.co",
-    serviceRoleKey || "placeholder-service-role-key",
-    { auth: { persistSession: false, autoRefreshToken: false } }
-  );
+  cachedClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   return cachedClient;
 }

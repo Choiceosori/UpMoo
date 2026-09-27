@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { withApiErrorHandling } from "@/lib/apiHandler";
 import { FileCategory, SubmissionUnit } from "@/lib/types";
 
-export async function GET(req: NextRequest) {
+export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const schoolId = req.nextUrl.searchParams.get("schoolId");
   if (!schoolId) {
     return NextResponse.json({ error: "schoolId가 필요합니다." }, { status: 400 });
@@ -16,9 +17,9 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ tasks: data });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const body = await req.json();
   const {
     schoolId,
@@ -61,4 +62,4 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ task: data }, { status: 201 });
-}
+});

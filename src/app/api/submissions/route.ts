@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
 import { buildSubmissionFilename } from "@/lib/filename";
 import { FileCategory } from "@/lib/types";
+import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
 
-export async function GET(req: NextRequest) {
+export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const schoolId = req.nextUrl.searchParams.get("schoolId");
   const taskId = req.nextUrl.searchParams.get("taskId");
   const grade = req.nextUrl.searchParams.get("grade");
@@ -28,9 +29,9 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ submissions: data });
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const formData = await req.formData();
 
   const schoolId = String(formData.get("schoolId") ?? "");
@@ -103,4 +104,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ submission }, { status: 201 });
-}
+});
