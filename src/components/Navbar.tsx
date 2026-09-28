@@ -5,17 +5,19 @@ import { usePathname, useRouter } from "next/navigation";
 import clsx from "clsx";
 import { useSchool } from "@/context/SchoolContext";
 
-const NAV_ITEMS = [
+const MANAGER_NAV_ITEMS = [
   { href: "/manager", label: "담당자 홈" },
   { href: "/manager/classes", label: "학급 편성" },
   { href: "/manager/tasks", label: "수합 업무" },
-  { href: "/submit", label: "자료 제출" },
 ];
+
+const SUBMIT_NAV_ITEMS = [{ href: "/submit", label: "자료 제출" }];
 
 export function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { schoolName, schoolCode, clearSchool } = useSchool();
+  const { schoolName, schoolCode, role, clearSchool } = useSchool();
+  const navItems = role === "submit" ? SUBMIT_NAV_ITEMS : MANAGER_NAV_ITEMS;
 
   const handleChangeSchool = () => {
     clearSchool();
@@ -34,7 +36,7 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden gap-1 md:flex">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
@@ -53,7 +55,12 @@ export function Navbar() {
         <div className="flex items-center gap-3 text-sm">
           {schoolName && (
             <div className="hidden text-right sm:block">
-              <p className="font-semibold text-slate-700">{schoolName}</p>
+              <p className="font-semibold text-slate-700">
+                {schoolName}
+                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                  {role === "manager" ? "업무 담당자" : "학급 담임"}
+                </span>
+              </p>
               <p className="text-xs text-slate-400">코드 {schoolCode}</p>
             </div>
           )}
@@ -61,7 +68,7 @@ export function Navbar() {
             onClick={handleChangeSchool}
             className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-500 hover:bg-slate-50"
           >
-            학교 변경
+            학교/역할 변경
           </button>
         </div>
       </div>

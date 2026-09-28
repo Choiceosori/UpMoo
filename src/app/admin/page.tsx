@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { School } from "@/lib/types";
 
 const SESSION_KEY = "upmoo.adminPassword";
@@ -104,7 +105,7 @@ export default function AdminPage() {
 
   if (!password) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-4">
         <form onSubmit={handleLogin} className="card w-full max-w-sm space-y-4">
           <h1 className="text-lg font-bold text-slate-900">전체 관리자 로그인</h1>
           <div>
@@ -121,6 +122,9 @@ export default function AdminPage() {
             로그인
           </button>
         </form>
+        <Link href="/" className="text-sm font-medium text-slate-500 underline hover:text-brand-700">
+          메인 화면으로 돌아가기
+        </Link>
       </div>
     );
   }
@@ -128,12 +132,17 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-10">
       <div className="mx-auto max-w-3xl space-y-8">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">전체 관리자</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            학교를 등록하면 학교 전용 접속 코드가 발급됩니다. 이 코드를 해당 학교 담당자/제출자에게
-            전달하면, 학교별로 완전히 분리된 데이터베이스 공간에서 업무를 관리할 수 있습니다.
-          </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">전체 관리자</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              학교를 등록하면 학교 전용 접속 코드가 발급됩니다. 이 코드를 해당 학교 담당자/제출자에게
+              전달하면, 학교별로 완전히 분리된 데이터베이스 공간에서 업무를 관리할 수 있습니다.
+            </p>
+          </div>
+          <Link href="/" className="btn-secondary whitespace-nowrap text-sm">
+            메인 화면으로
+          </Link>
         </div>
 
         <div className="card">

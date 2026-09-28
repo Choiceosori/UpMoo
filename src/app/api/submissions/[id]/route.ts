@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
-import { buildSubmissionFilename } from "@/lib/filename";
+import { buildSubmissionFilename, extractExtension } from "@/lib/filename";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export const GET = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
 
     const { data: signedUrl } = await supabaseAdmin.storage
       .from(SUBMISSIONS_BUCKET)
-      .createSignedUrl(data.storage_path, 60 * 10);
+      .createSignedUrl(data.storage_path, 60 * 10, { download: data.stored_filename });
 
     return NextResponse.json({ submission: data, downloadUrl: signedUrl?.signedUrl ?? null });
   }
@@ -56,7 +57,7 @@ export const PATCH = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
         taskName: taskInfo?.name ?? "업무",
         originalFilename: file.name,
       });
-      const newStoragePath = `${existing.school_id}/${existing.task_id}/${Date.now()}_${storedFilename}`;
+      const newStoragePath = `${existing.school_id}/${existing.task_id}/${Date.now()}_${randomUUID()}${extractExtension(file.name)}`;
       const buffer = Buffer.from(await file.arrayBuffer());
 
       const { error: uploadError } = await supabaseAdmin.storage

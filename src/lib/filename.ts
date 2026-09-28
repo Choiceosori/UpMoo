@@ -11,6 +11,11 @@ function splitExt(filename: string): { base: string; ext: string } {
   return { base: filename.slice(0, idx), ext: filename.slice(idx) };
 }
 
+/** 파일 확장자만 추출합니다 (점 포함, 예: ".hwp"). 확장자가 없으면 빈 문자열을 반환합니다. */
+export function extractExtension(filename: string): string {
+  return splitExt(filename).ext;
+}
+
 /**
  * 제출 파일명을 [학년_반_업무명_파일명] 규칙으로 변환합니다.
  * 학년 단위 제출(unit === "grade")인 경우 반 구분 없이 "N학년" 표기만 포함합니다.

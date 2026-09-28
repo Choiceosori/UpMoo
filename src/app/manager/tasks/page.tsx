@@ -268,7 +268,7 @@ function TasksInner() {
 
 export default function ManagerTasksPage() {
   return (
-    <SchoolGate>
+    <SchoolGate requiredRole="manager">
       <TasksInner />
     </SchoolGate>
   );

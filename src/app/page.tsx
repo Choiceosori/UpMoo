@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import clsx from "clsx";
-import { useSchool } from "@/context/SchoolContext";
+import { useSchool, UserRole } from "@/context/SchoolContext";
 
-type Role = "manager" | "submit";
+type Role = UserRole;
 
 export default function HomePage() {
   const router = useRouter();
@@ -32,7 +32,7 @@ export default function HomePage() {
         setError("등록되지 않은 학교 코드입니다. 전체 관리자에게 문의하세요.");
         return;
       }
-      setSchool({ id: school.id, name: school.name, code: school.code });
+      setSchool({ id: school.id, name: school.name, code: school.code, role });
       router.push(role === "manager" ? "/manager" : "/submit");
     } catch {
       setError("서버와 통신 중 오류가 발생했습니다.");
@@ -72,9 +72,14 @@ export default function HomePage() {
                 role === "submit" ? "bg-white text-brand-700 shadow" : "text-slate-500"
               )}
             >
-              제출자
+              학급 담임(제출자)
             </button>
           </div>
+          <p className="mb-4 -mt-2 text-xs text-slate-400">
+            {role === "manager"
+              ? "업무 등록, 학급 편성, 통합 파일 수합 등 관리 기능을 사용합니다."
+              : "우리 반 자료를 업로드/조회/수정합니다. 관리 기능에는 접근할 수 없습니다."}
+          </p>
 
           <form onSubmit={handleEnter} className="space-y-3">
             <div>

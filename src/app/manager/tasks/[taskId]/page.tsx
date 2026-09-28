@@ -177,7 +177,7 @@ function TaskDetailInner() {
 
 export default function TaskDetailPage() {
   return (
-    <SchoolGate>
+    <SchoolGate requiredRole="manager">
       <TaskDetailInner />
     </SchoolGate>
   );

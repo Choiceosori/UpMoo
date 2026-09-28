@@ -144,7 +144,7 @@ function ClassesInner() {
 
 export default function ManagerClassesPage() {
   return (
-    <SchoolGate>
+    <SchoolGate requiredRole="manager">
       <ClassesInner />
     </SchoolGate>
   );

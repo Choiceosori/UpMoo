@@ -2,11 +2,14 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
+export type UserRole = "manager" | "submit";
+
 interface SchoolContextValue {
   schoolId: string | null;
   schoolName: string | null;
   schoolCode: string | null;
-  setSchool: (school: { id: string; name: string; code: string }) => void;
+  role: UserRole | null;
+  setSchool: (school: { id: string; name: string; code: string; role: UserRole }) => void;
   clearSchool: () => void;
 }
 
@@ -18,6 +21,7 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   const [schoolId, setSchoolId] = useState<string | null>(null);
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [schoolCode, setSchoolCode] = useState<string | null>(null);
+  const [role, setRole] = useState<UserRole | null>(null);
 
   useEffect(() => {
     try {
@@ -27,27 +31,33 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
         setSchoolId(parsed.id);
         setSchoolName(parsed.name);
         setSchoolCode(parsed.code);
+        setRole(parsed.role ?? null);
       }
     } catch {
       // localStorage 접근 불가 시 무시
     }
   }, []);
 
-  const setSchool = useCallback((school: { id: string; name: string; code: string }) => {
-    setSchoolId(school.id);
-    setSchoolName(school.name);
-    setSchoolCode(school.code);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(school));
-    } catch {
-      // ignore
-    }
-  }, []);
+  const setSchool = useCallback(
+    (school: { id: string; name: string; code: string; role: UserRole }) => {
+      setSchoolId(school.id);
+      setSchoolName(school.name);
+      setSchoolCode(school.code);
+      setRole(school.role);
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(school));
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
 
   const clearSchool = useCallback(() => {
     setSchoolId(null);
     setSchoolName(null);
     setSchoolCode(null);
+    setRole(null);
     try {
       window.localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -56,8 +66,8 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ schoolId, schoolName, schoolCode, setSchool, clearSchool }),
-    [schoolId, schoolName, schoolCode, setSchool, clearSchool]
+    () => ({ schoolId, schoolName, schoolCode, role, setSchool, clearSchool }),
+    [schoolId, schoolName, schoolCode, role, setSchool, clearSchool]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

@@ -5,12 +5,12 @@ import { SchoolGate } from "@/components/SchoolGate";
 
 export default function ManagerHomePage() {
   return (
-    <SchoolGate>
+    <SchoolGate requiredRole="manager">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">업무 담당자 홈</h1>
           <p className="mt-1 text-sm text-slate-500">
-            학급 편성을 먼저 등록한 뒤, 수합 업무를 만들어 제출자에게 안내하세요.
+            학급 편성을 먼저 등록한 뒤, 수합 업무를 만들어 학급 담임에게 안내하세요.
           </p>
         </div>
 

@@ -351,7 +351,7 @@ function SubmitInner() {
 
 export default function SubmitPage() {
   return (
-    <SchoolGate>
+    <SchoolGate requiredRole="submit">
       <SubmitInner />
     </SchoolGate>
   );

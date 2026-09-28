@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
-import { buildSubmissionFilename } from "@/lib/filename";
+import { buildSubmissionFilename, extractExtension } from "@/lib/filename";
 import { FileCategory } from "@/lib/types";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
@@ -66,7 +67,9 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     originalFilename: file.name,
   });
 
-  const storagePath = `${schoolId}/${taskId}/${Date.now()}_${storedFilename}`;
+  // Supabase Storage의 오브젝트 키는 한글/공백 등이 포함되면 거부될 수 있으므로,
+  // 실제 저장 경로는 ASCII로만 구성하고 사람이 읽는 파일명은 stored_filename 컬럼에 별도 보관합니다.
+  const storagePath = `${schoolId}/${taskId}/${Date.now()}_${randomUUID()}${extractExtension(file.name)}`;
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
