@@ -16,6 +16,9 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [newlyCreatedCode, setNewlyCreatedCode] = useState<string | null>(null);
 
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+
   useEffect(() => {
     const saved = sessionStorage.getItem(SESSION_KEY);
     if (saved) setPassword(saved);
@@ -74,6 +77,21 @@ export default function AdminPage() {
     fetchSchools();
   };
 
+  const handleDiagnose = async () => {
+    if (!password) return;
+    setDiagnosing(true);
+    setDiagnostics(null);
+    try {
+      const res = await fetch("/api/admin/diagnostics", {
+        headers: { "x-admin-password": password },
+      });
+      const json = await res.json();
+      setDiagnostics(json);
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
   const handleDelete = async (id: string) => {
     if (!password) return;
     if (!confirm("이 학교와 관련된 모든 데이터가 삭제됩니다. 계속할까요?")) return;
@@ -116,6 +134,42 @@ export default function AdminPage() {
             학교를 등록하면 학교 전용 접속 코드가 발급됩니다. 이 코드를 해당 학교 담당자/제출자에게
             전달하면, 학교별로 완전히 분리된 데이터베이스 공간에서 업무를 관리할 수 있습니다.
           </p>
+        </div>
+
+        <div className="card">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-800">환경 진단</h2>
+            <button onClick={handleDiagnose} disabled={diagnosing} className="btn-secondary text-xs">
+              {diagnosing ? "확인 중..." : "Supabase 연결 확인"}
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            학교 등록/저장이 실패할 때 원인(환경변수 미설정, 잘못된 키 종류 등)을 값 노출 없이
+            확인합니다.
+          </p>
+          {diagnostics && (
+            <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+              <p>
+                <span className="font-medium">SUPABASE_URL:</span>{" "}
+                {diagnostics.supabaseUrlConfigured
+                  ? `설정됨 (${diagnostics.supabaseUrlHost ?? "?"})`
+                  : "미설정"}
+              </p>
+              <p>
+                <span className="font-medium">SERVICE_ROLE_KEY:</span>{" "}
+                {diagnostics.serviceRoleKeyConfigured
+                  ? String(diagnostics.serviceRoleKeyFormat)
+                  : "미설정"}
+              </p>
+              <p
+                className={`font-medium ${
+                  String(diagnostics.verdict).startsWith("정상") ? "text-emerald-600" : "text-red-500"
+                }`}
+              >
+                {String(diagnostics.verdict)}
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="card">

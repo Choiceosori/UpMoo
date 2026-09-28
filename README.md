@@ -93,6 +93,22 @@ npm run dev
   유지한 채 하나의 워크북에 순서대로 추가합니다(시트명 앞에 제출자 라벨 부여).
 - "엑셀(지출) 통합 다운로드": 동일 양식의 데이터 행을 새 워크북의 기존 데이터 하단에 이어붙입니다(Append).
 
+## 문제 해결 (Troubleshooting)
+
+- **`TypeError: fetch failed`**: `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY`가 Vercel에 설정되지
+  않았을 때 발생합니다. Vercel Settings > Environment Variables에 값을 등록한 뒤 반드시
+  **재배포**하세요(환경변수는 재배포해야 반영됩니다).
+- **`Could not find the table 'public.xxx' in the schema cache`**: Supabase 프로젝트에
+  `supabase/schema.sql`이 아직 실행되지 않았습니다. SQL Editor에서 전체 내용을 실행하세요.
+- **`new row violates row-level security policy for table "xxx"`**: 보통 `anon`(공개) 키를
+  `service_role`(비밀) 키 자리에 잘못 넣었을 때 발생합니다. Supabase Project Settings > API에서
+  `service_role secret` 키를 다시 복사해 Vercel의 `SUPABASE_SERVICE_ROLE_KEY`에 넣고 재배포하세요.
+  - `/admin` 페이지 로그인 후 "Supabase 연결 확인" 버튼을 누르면 실제 키 값을 노출하지 않고
+    service_role 키가 맞는지 진단해줍니다.
+  - 일부 테이블에서만 이 오류가 난다면 `supabase/schema.sql`을 다시 한번 전체 실행해보세요. 최신
+    버전은 service_role에 대해 명시적으로 모든 작업을 허용하는 정책을 각 테이블에 추가해,
+    BYPASSRLS 속성에만 의존하지 않도록 되어 있습니다(재실행해도 안전하게 idempotent합니다).
+
 ## 보안 참고사항
 
 `npm audit` 기준으로 아래 항목이 남아있으며, 실사용 전 인지해두는 것을 권장합니다.

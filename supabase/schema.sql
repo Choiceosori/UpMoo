@@ -65,5 +65,24 @@ alter table schools enable row level security;
 alter table class_structures enable row level security;
 alter table collection_tasks enable row level security;
 alter table submissions enable row level security;
--- 별도 정책을 추가하지 않으면 anon/authenticated 키로는 접근이 차단되고,
--- service role 키(서버 전용)만 모든 작업을 수행할 수 있습니다.
+
+-- service_role은 원래 RLS를 우회하지만, 일부 프로젝트 설정(예: 테이블에
+-- FORCE ROW LEVEL SECURITY가 걸려있거나 role 속성이 달라진 경우)에서는
+-- 우회가 보장되지 않을 수 있습니다. 이를 위해 service_role에 대해
+-- 명시적으로 모든 작업을 허용하는 정책을 추가해 안전하게 만듭니다.
+-- (anon/authenticated 키는 아래 정책 대상이 아니므로 여전히 차단됩니다.)
+drop policy if exists "service_role_all_schools" on schools;
+create policy "service_role_all_schools" on schools
+  for all to service_role using (true) with check (true);
+
+drop policy if exists "service_role_all_class_structures" on class_structures;
+create policy "service_role_all_class_structures" on class_structures
+  for all to service_role using (true) with check (true);
+
+drop policy if exists "service_role_all_collection_tasks" on collection_tasks;
+create policy "service_role_all_collection_tasks" on collection_tasks
+  for all to service_role using (true) with check (true);
+
+drop policy if exists "service_role_all_submissions" on submissions;
+create policy "service_role_all_submissions" on submissions
+  for all to service_role using (true) with check (true);
