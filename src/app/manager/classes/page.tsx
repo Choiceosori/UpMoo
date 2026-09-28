@@ -16,6 +16,7 @@ function ClassesInner() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     if (!schoolId) return;
@@ -26,16 +27,21 @@ function ClassesInner() {
   const fetchClasses = async () => {
     setLoading(true);
     setMessage(null);
+    setIsError(false);
     try {
       const res = await fetch(
         `/api/classes?schoolId=${schoolId}&year=${year}&semester=${semester}`
       );
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "학급 정보를 불러오지 못했습니다.");
       const map: Record<number, number> = {};
       (json.classStructures ?? []).forEach((c: ClassStructure) => {
         map[c.grade] = c.class_count;
       });
       setClassCounts(map);
+    } catch (err) {
+      setIsError(true);
+      setMessage(err instanceof Error ? err.message : "학급 정보를 불러오지 못했습니다.");
     } finally {
       setLoading(false);
     }
@@ -45,6 +51,7 @@ function ClassesInner() {
     if (!schoolId) return;
     setSaving(true);
     setMessage(null);
+    setIsError(false);
     try {
       const grades = GRADES.map((grade) => ({
         grade,
@@ -55,10 +62,12 @@ function ClassesInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ schoolId, year, semester, grades }),
       });
-      if (!res.ok) throw new Error();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "저장 중 오류가 발생했습니다.");
       setMessage("저장되었습니다.");
-    } catch {
-      setMessage("저장 중 오류가 발생했습니다.");
+    } catch (err) {
+      setIsError(true);
+      setMessage(err instanceof Error ? err.message : "저장 중 오류가 발생했습니다.");
     } finally {
       setSaving(false);
     }
@@ -122,7 +131,11 @@ function ClassesInner() {
           <button onClick={handleSave} disabled={saving} className="btn-primary">
             {saving ? "저장 중..." : "저장"}
           </button>
-          {message && <span className="text-sm text-slate-500">{message}</span>}
+          {message && (
+            <span className={`text-sm ${isError ? "text-red-500" : "text-emerald-600"}`}>
+              {message}
+            </span>
+          )}
         </div>
       </div>
     </div>
