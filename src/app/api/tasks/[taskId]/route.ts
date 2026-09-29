@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { query, queryOne } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/apiHandler";
+import { CollectionTask } from "@/lib/types";
 
 export const GET = withApiErrorHandling<{ params: Promise<{ taskId: string }> }>(
   async (_req, { params }) => {
     const { taskId } = await params;
-    const { data, error } = await supabaseAdmin
-      .from("collection_tasks")
-      .select("*")
-      .eq("id", taskId)
-      .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
-    return NextResponse.json({ task: data });
+    const task = await queryOne<CollectionTask>(
+      "select * from collection_tasks where id = $1",
+      [taskId]
+    );
+    if (!task) return NextResponse.json({ error: "업무를 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ task });
   }
 );
 
@@ -20,31 +19,39 @@ export const PATCH = withApiErrorHandling<{ params: Promise<{ taskId: string }> 
   async (req, { params }) => {
     const { taskId } = await params;
     const body = await req.json();
-    const updates: Record<string, unknown> = {};
 
-    if (body.name !== undefined) updates.name = String(body.name).trim();
-    if (body.description !== undefined) updates.description = body.description?.trim() || null;
-    if (body.deadline !== undefined) updates.deadline = body.deadline || null;
-    if (body.unit !== undefined) updates.unit = body.unit;
-    if (body.allowedFileTypes !== undefined) updates.allowed_file_types = body.allowedFileTypes;
+    const columns: Record<string, unknown> = {};
+    if (body.name !== undefined) columns.name = String(body.name).trim();
+    if (body.description !== undefined) columns.description = body.description?.trim() || null;
+    if (body.deadline !== undefined) columns.deadline = body.deadline || null;
+    if (body.unit !== undefined) columns.unit = body.unit;
+    if (body.allowedFileTypes !== undefined) columns.allowed_file_types = body.allowedFileTypes;
 
-    const { data, error } = await supabaseAdmin
-      .from("collection_tasks")
-      .update(updates)
-      .eq("id", taskId)
-      .select()
-      .single();
+    const keys = Object.keys(columns);
+    if (keys.length === 0) {
+      const task = await queryOne<CollectionTask>(
+        "select * from collection_tasks where id = $1",
+        [taskId]
+      );
+      return NextResponse.json({ task });
+    }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ task: data });
+    const setClause = keys.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
+    const sqlParams = [...keys.map((key) => columns[key]), taskId];
+
+    const task = await queryOne<CollectionTask>(
+      `update collection_tasks set ${setClause} where id = $${sqlParams.length} returning *`,
+      sqlParams
+    );
+
+    return NextResponse.json({ task });
   }
 );
 
 export const DELETE = withApiErrorHandling<{ params: Promise<{ taskId: string }> }>(
   async (_req, { params }) => {
     const { taskId } = await params;
-    const { error } = await supabaseAdmin.from("collection_tasks").delete().eq("id", taskId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await query("delete from collection_tasks where id = $1", [taskId]);
     return NextResponse.json({ ok: true });
   }
 );

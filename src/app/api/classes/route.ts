@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { query } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/apiHandler";
+import { ClassStructure } from "@/lib/types";
 
 export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const schoolId = req.nextUrl.searchParams.get("schoolId");
@@ -11,18 +12,24 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "schoolId가 필요합니다." }, { status: 400 });
   }
 
-  let query = supabaseAdmin
-    .from("class_structures")
-    .select("*")
-    .eq("school_id", schoolId)
-    .order("grade", { ascending: true });
+  const conditions = ["school_id = $1"];
+  const params: unknown[] = [schoolId];
 
-  if (year) query = query.eq("year", Number(year));
-  if (semester) query = query.eq("semester", Number(semester));
+  if (year) {
+    params.push(Number(year));
+    conditions.push(`year = $${params.length}`);
+  }
+  if (semester) {
+    params.push(Number(semester));
+    conditions.push(`semester = $${params.length}`);
+  }
 
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ classStructures: data });
+  const classStructures = await query<ClassStructure>(
+    `select * from class_structures where ${conditions.join(" and ")} order by grade asc`,
+    params
+  );
+
+  return NextResponse.json({ classStructures });
 });
 
 /** 학년별 학급 수를 upsert 합니다. body: { schoolId, year, semester, grades: [{grade, classCount}] } */
@@ -35,23 +42,27 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     grades: { grade: number; classCount: number }[];
   };
 
-  if (!schoolId || !year || !semester || !Array.isArray(grades)) {
+  if (!schoolId || !year || !semester || !Array.isArray(grades) || grades.length === 0) {
     return NextResponse.json({ error: "잘못된 요청입니다." }, { status: 400 });
   }
 
-  const rows = grades.map((g) => ({
-    school_id: schoolId,
-    year,
-    semester,
-    grade: g.grade,
-    class_count: g.classCount,
-  }));
+  const params: unknown[] = [];
+  const valuesSql = grades
+    .map((g) => {
+      params.push(schoolId, year, semester, g.grade, g.classCount);
+      const base = params.length - 5;
+      return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`;
+    })
+    .join(", ");
 
-  const { data, error } = await supabaseAdmin
-    .from("class_structures")
-    .upsert(rows, { onConflict: "school_id,year,semester,grade" })
-    .select();
+  const classStructures = await query<ClassStructure>(
+    `insert into class_structures (school_id, year, semester, grade, class_count)
+     values ${valuesSql}
+     on conflict (school_id, year, semester, grade)
+     do update set class_count = excluded.class_count
+     returning *`,
+    params
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ classStructures: data });
+  return NextResponse.json({ classStructures });
 });

@@ -17,7 +17,12 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [newlyCreatedCode, setNewlyCreatedCode] = useState<string | null>(null);
 
-  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  interface DiagnosticsResult {
+    database: { configured: boolean; host: string | null; connected: boolean; error: string | null };
+    storage: { configured: boolean; bucket: string | null; connected: boolean; error: string | null };
+    verdict: string;
+  }
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
   const [diagnosing, setDiagnosing] = useState(false);
 
   useEffect(() => {
@@ -149,30 +154,36 @@ export default function AdminPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-slate-800">환경 진단</h2>
             <button onClick={handleDiagnose} disabled={diagnosing} className="btn-secondary text-xs">
-              {diagnosing ? "확인 중..." : "Supabase 연결 확인"}
+              {diagnosing ? "확인 중..." : "NCP 연결 확인"}
             </button>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            학교 등록/저장이 실패할 때 원인(환경변수 미설정, 잘못된 키 종류 등)을 값 노출 없이
-            확인합니다.
+            Cloud DB for PostgreSQL / Object Storage에 실제로 접속을 시도해 연결 상태를 값 노출
+            없이 확인합니다.
           </p>
           {diagnostics && (
             <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
               <p>
-                <span className="font-medium">SUPABASE_URL:</span>{" "}
-                {diagnostics.supabaseUrlConfigured
-                  ? `설정됨 (${diagnostics.supabaseUrlHost ?? "?"})`
-                  : "미설정"}
+                <span className="font-medium">Cloud DB for PostgreSQL:</span>{" "}
+                {!diagnostics.database?.configured
+                  ? "미설정"
+                  : diagnostics.database.connected
+                    ? `연결됨 (${diagnostics.database.host ?? "?"})`
+                    : `연결 실패 (${diagnostics.database.host ?? "?"})`}
               </p>
               <p>
-                <span className="font-medium">SERVICE_ROLE_KEY:</span>{" "}
-                {diagnostics.serviceRoleKeyConfigured
-                  ? String(diagnostics.serviceRoleKeyFormat)
-                  : "미설정"}
+                <span className="font-medium">Object Storage:</span>{" "}
+                {!diagnostics.storage?.configured
+                  ? "미설정"
+                  : diagnostics.storage.connected
+                    ? `연결됨 (버킷: ${diagnostics.storage.bucket})`
+                    : `연결 실패 (버킷: ${diagnostics.storage.bucket})`}
               </p>
               <p
                 className={`font-medium ${
-                  String(diagnostics.verdict).startsWith("정상") ? "text-emerald-600" : "text-red-500"
+                  diagnostics.database?.connected && diagnostics.storage?.connected
+                    ? "text-emerald-600"
+                    : "text-red-500"
                 }`}
               >
                 {String(diagnostics.verdict)}

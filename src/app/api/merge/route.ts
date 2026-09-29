@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
+import { query, queryOne } from "@/lib/db";
+import { downloadObject } from "@/lib/ncpStorage";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
-import { Submission } from "@/lib/types";
+import { CollectionTask, Submission } from "@/lib/types";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
@@ -31,40 +32,29 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "지원하지 않는 category 입니다." }, { status: 400 });
   }
 
-  const { data: task, error: taskError } = await supabaseAdmin
-    .from("collection_tasks")
-    .select("*")
-    .eq("id", taskId)
-    .single();
+  const task = await queryOne<CollectionTask>(
+    "select * from collection_tasks where id = $1",
+    [taskId]
+  );
 
-  if (taskError || !task) {
+  if (!task) {
     return NextResponse.json({ error: "업무를 찾을 수 없습니다." }, { status: 404 });
   }
 
-  const { data: submissions, error: subError } = await supabaseAdmin
-    .from("submissions")
-    .select("*")
-    .eq("task_id", taskId)
-    .eq("file_category", category)
-    .order("grade", { ascending: true })
-    .order("class_no", { ascending: true, nullsFirst: true });
+  const submissions = await query<Submission>(
+    `select * from submissions
+     where task_id = $1 and file_category = $2
+     order by grade asc, class_no asc nulls first`,
+    [taskId, category]
+  );
 
-  if (subError) {
-    return NextResponse.json({ error: subError.message }, { status: 500 });
-  }
-  if (!submissions || submissions.length === 0) {
+  if (submissions.length === 0) {
     return NextResponse.json({ error: "병합할 제출 자료가 없습니다." }, { status: 404 });
   }
 
   const inputs = await Promise.all(
-    (submissions as Submission[]).map(async (sub) => {
-      const { data, error } = await supabaseAdmin.storage
-        .from(SUBMISSIONS_BUCKET)
-        .download(sub.storage_path);
-      if (error || !data) {
-        throw new Error(`파일 다운로드 실패: ${sub.stored_filename}`);
-      }
-      const buffer = Buffer.from(await data.arrayBuffer());
+    submissions.map(async (sub) => {
+      const buffer = await downloadObject(sub.storage_path);
       return { label: labelFor(sub), buffer };
     })
   );

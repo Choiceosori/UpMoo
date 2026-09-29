@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { supabaseAdmin, SUBMISSIONS_BUCKET } from "@/lib/supabaseAdmin";
+import { query, queryOne } from "@/lib/db";
+import { getSignedDownloadUrl, removeObjects, uploadObject } from "@/lib/ncpStorage";
 import { buildSubmissionFilename, extractExtension } from "@/lib/filename";
+import { Submission } from "@/lib/types";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
@@ -9,19 +11,21 @@ export const runtime = "nodejs";
 export const GET = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
   async (_req, { params }) => {
     const { id } = await params;
-    const { data, error } = await supabaseAdmin
-      .from("submissions")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const submission = await queryOne<Submission>("select * from submissions where id = $1", [
+      id,
+    ]);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    if (!submission) {
+      return NextResponse.json({ error: "제출 자료를 찾을 수 없습니다." }, { status: 404 });
+    }
 
-    const { data: signedUrl } = await supabaseAdmin.storage
-      .from(SUBMISSIONS_BUCKET)
-      .createSignedUrl(data.storage_path, 60 * 10, { download: data.stored_filename });
+    const downloadUrl = await getSignedDownloadUrl(
+      submission.storage_path,
+      60 * 10,
+      submission.stored_filename
+    );
 
-    return NextResponse.json({ submission: data, downloadUrl: signedUrl?.signedUrl ?? null });
+    return NextResponse.json({ submission, downloadUrl });
   }
 );
 
@@ -34,59 +38,54 @@ export const PATCH = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
     const piiFlagged = formData.get("piiFlagged");
     const expenseFlagged = formData.get("expenseFlagged");
 
-    const { data: existing, error: fetchError } = await supabaseAdmin
-      .from("submissions")
-      .select("*, collection_tasks(name, unit)")
-      .eq("id", id)
-      .single();
+    const existing = await queryOne<
+      Submission & { task_name: string; task_unit: "grade" | "class" }
+    >(
+      `select s.*, t.name as task_name, t.unit as task_unit
+       from submissions s
+       join collection_tasks t on t.id = s.task_id
+       where s.id = $1`,
+      [id]
+    );
 
-    if (fetchError || !existing) {
+    if (!existing) {
       return NextResponse.json({ error: "제출 자료를 찾을 수 없습니다." }, { status: 404 });
     }
 
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    const columns: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if (file) {
-      const taskInfo = existing.collection_tasks as unknown as
-        | { name: string; unit: "grade" | "class" }
-        | undefined;
       const storedFilename = buildSubmissionFilename({
-        unit: taskInfo?.unit ?? "class",
+        unit: existing.task_unit,
         grade: existing.grade,
         classNo: existing.class_no,
-        taskName: taskInfo?.name ?? "업무",
+        taskName: existing.task_name,
         originalFilename: file.name,
       });
       const newStoragePath = `${existing.school_id}/${existing.task_id}/${Date.now()}_${randomUUID()}${extractExtension(file.name)}`;
       const buffer = Buffer.from(await file.arrayBuffer());
 
-      const { error: uploadError } = await supabaseAdmin.storage
-        .from(SUBMISSIONS_BUCKET)
-        .upload(newStoragePath, buffer, {
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
-      if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+      await uploadObject(newStoragePath, buffer, file.type || "application/octet-stream");
+      await removeObjects([existing.storage_path]);
 
-      await supabaseAdmin.storage.from(SUBMISSIONS_BUCKET).remove([existing.storage_path]);
-
-      updates.original_filename = file.name;
-      updates.stored_filename = storedFilename;
-      updates.storage_path = newStoragePath;
-      updates.size_bytes = buffer.byteLength;
+      columns.original_filename = file.name;
+      columns.stored_filename = storedFilename;
+      columns.storage_path = newStoragePath;
+      columns.size_bytes = buffer.byteLength;
     }
 
-    if (piiFlagged !== null) updates.pii_flagged = piiFlagged === "true";
-    if (expenseFlagged !== null) updates.expense_flagged = expenseFlagged === "true";
+    if (piiFlagged !== null) columns.pii_flagged = piiFlagged === "true";
+    if (expenseFlagged !== null) columns.expense_flagged = expenseFlagged === "true";
 
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from("submissions")
-      .update(updates)
-      .eq("id", id)
-      .select()
-      .single();
+    const keys = Object.keys(columns);
+    const setClause = keys.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
+    const sqlParams = [...keys.map((key) => columns[key]), id];
 
-    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+    const updated = await queryOne<Submission>(
+      `update submissions set ${setClause} where id = $${sqlParams.length} returning *`,
+      sqlParams
+    );
+
     return NextResponse.json({ submission: updated });
   }
 );
@@ -94,18 +93,16 @@ export const PATCH = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
 export const DELETE = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
   async (_req, { params }) => {
     const { id } = await params;
-    const { data: existing } = await supabaseAdmin
-      .from("submissions")
-      .select("storage_path")
-      .eq("id", id)
-      .single();
+    const existing = await queryOne<Submission>(
+      "select storage_path from submissions where id = $1",
+      [id]
+    );
 
     if (existing) {
-      await supabaseAdmin.storage.from(SUBMISSIONS_BUCKET).remove([existing.storage_path]);
+      await removeObjects([existing.storage_path]);
     }
 
-    const { error } = await supabaseAdmin.from("submissions").delete().eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await query("delete from submissions where id = $1", [id]);
     return NextResponse.json({ ok: true });
   }
 );

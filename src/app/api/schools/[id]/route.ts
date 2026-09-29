@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { query } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
 function isAdminAuthorized(req: NextRequest): boolean {
@@ -13,8 +13,7 @@ export const DELETE = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
       return NextResponse.json({ error: "관리자 인증이 필요합니다." }, { status: 401 });
     }
     const { id } = await params;
-    const { error } = await supabaseAdmin.from("schools").delete().eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await query("delete from schools where id = $1", [id]);
     return NextResponse.json({ ok: true });
   }
 );

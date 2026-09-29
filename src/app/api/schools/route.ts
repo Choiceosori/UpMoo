@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { query, queryOne } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/apiHandler";
+import { School } from "@/lib/types";
 
 function isAdminAuthorized(req: NextRequest): boolean {
   const password = req.headers.get("x-admin-password");
@@ -14,14 +15,11 @@ function generateSchoolCode(): string {
 export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const code = req.nextUrl.searchParams.get("code");
 
-  let query = supabaseAdmin.from("schools").select("*").order("created_at", { ascending: false });
-  if (code) {
-    query = supabaseAdmin.from("schools").select("*").eq("code", code.toUpperCase());
-  }
+  const schools = code
+    ? await query<School>("select * from schools where code = $1", [code.toUpperCase()])
+    : await query<School>("select * from schools order by created_at desc");
 
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ schools: data });
+  return NextResponse.json({ schools });
 });
 
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
@@ -35,13 +33,24 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "학교명을 입력해주세요." }, { status: 400 });
   }
 
-  const code = generateSchoolCode();
-  const { data, error } = await supabaseAdmin
-    .from("schools")
-    .insert({ name, code })
-    .select()
-    .single();
+  // 코드 충돌(극히 드묾) 시 재시도합니다.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const code = generateSchoolCode();
+    try {
+      const school = await queryOne<School>(
+        "insert into schools (name, code) values ($1, $2) returning *",
+        [name, code]
+      );
+      return NextResponse.json({ school }, { status: 201 });
+    } catch (err) {
+      const isUniqueViolation =
+        err instanceof Error && (err as { code?: string }).code === "23505";
+      if (!isUniqueViolation) throw err;
+    }
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ school: data }, { status: 201 });
+  return NextResponse.json(
+    { error: "학교 코드를 발급하지 못했습니다. 다시 시도해주세요." },
+    { status: 500 }
+  );
 });

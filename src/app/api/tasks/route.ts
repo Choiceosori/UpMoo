@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { query, queryOne } from "@/lib/db";
 import { withApiErrorHandling } from "@/lib/apiHandler";
-import { FileCategory, SubmissionUnit } from "@/lib/types";
+import { CollectionTask, FileCategory, SubmissionUnit } from "@/lib/types";
 
 export const GET = withApiErrorHandling(async (req: NextRequest) => {
   const schoolId = req.nextUrl.searchParams.get("schoolId");
@@ -9,14 +9,12 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "schoolId가 필요합니다." }, { status: 400 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("collection_tasks")
-    .select("*")
-    .eq("school_id", schoolId)
-    .order("position", { ascending: true });
+  const tasks = await query<CollectionTask>(
+    "select * from collection_tasks where school_id = $1 order by position asc",
+    [schoolId]
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ tasks: data });
+  return NextResponse.json({ tasks });
 });
 
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
@@ -41,25 +39,27 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "필수 항목이 누락되었습니다." }, { status: 400 });
   }
 
-  const { count } = await supabaseAdmin
-    .from("collection_tasks")
-    .select("id", { count: "exact", head: true })
-    .eq("school_id", schoolId);
+  const countRow = await queryOne<{ count: string }>(
+    "select count(*) from collection_tasks where school_id = $1",
+    [schoolId]
+  );
+  const position = Number(countRow?.count ?? 0);
 
-  const { data, error } = await supabaseAdmin
-    .from("collection_tasks")
-    .insert({
-      school_id: schoolId,
-      name: name.trim(),
-      description: description?.trim() || null,
-      deadline: deadline || null,
+  const task = await queryOne<CollectionTask>(
+    `insert into collection_tasks
+       (school_id, name, description, deadline, unit, allowed_file_types, position)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning *`,
+    [
+      schoolId,
+      name.trim(),
+      description?.trim() || null,
+      deadline || null,
       unit,
-      allowed_file_types: allowedFileTypes,
-      position: count ?? 0,
-    })
-    .select()
-    .single();
+      allowedFileTypes,
+      position,
+    ]
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ task: data }, { status: 201 });
+  return NextResponse.json({ task }, { status: 201 });
 });

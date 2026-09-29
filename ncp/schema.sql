@@ -1,5 +1,9 @@
--- UpMoo: 학교 업무 자료 수합 시스템 DB 스키마 (Supabase / PostgreSQL)
--- Supabase 대시보드 SQL Editor에서 실행하세요.
+-- UpMoo: 학교 업무 자료 수합 시스템 DB 스키마 (네이버 클라우드 Cloud DB for PostgreSQL용)
+-- NCP 콘솔에서 발급받은 접속 정보로 psql 또는 DBeaver 등으로 접속한 뒤 실행하세요.
+--
+-- 이 스키마는 Supabase용 schema.sql과 달리 RLS(행 단위 보안) 정책이 없습니다.
+-- 이 앱은 PostgREST 같은 공개 API 계층 없이, 서버(API Route)가 DATABASE_URL로
+-- 직접 접속해서만 데이터베이스를 사용하므로 RLS 자체가 필요하지 않습니다.
 
 create extension if not exists "pgcrypto";
 
@@ -59,30 +63,5 @@ create table if not exists submissions (
 create index if not exists idx_submissions_task on submissions(task_id);
 create index if not exists idx_submissions_school on submissions(school_id);
 
--- Storage 버킷은 Supabase Storage 화면에서 "submissions" 이름으로 생성하세요.
--- 서버(API Route)는 Service Role Key로만 접근하므로 RLS는 기본(비공개) 상태로 두어도 안전합니다.
-alter table schools enable row level security;
-alter table class_structures enable row level security;
-alter table collection_tasks enable row level security;
-alter table submissions enable row level security;
-
--- service_role은 원래 RLS를 우회하지만, 일부 프로젝트 설정(예: 테이블에
--- FORCE ROW LEVEL SECURITY가 걸려있거나 role 속성이 달라진 경우)에서는
--- 우회가 보장되지 않을 수 있습니다. 이를 위해 service_role에 대해
--- 명시적으로 모든 작업을 허용하는 정책을 추가해 안전하게 만듭니다.
--- (anon/authenticated 키는 아래 정책 대상이 아니므로 여전히 차단됩니다.)
-drop policy if exists "service_role_all_schools" on schools;
-create policy "service_role_all_schools" on schools
-  for all to service_role using (true) with check (true);
-
-drop policy if exists "service_role_all_class_structures" on class_structures;
-create policy "service_role_all_class_structures" on class_structures
-  for all to service_role using (true) with check (true);
-
-drop policy if exists "service_role_all_collection_tasks" on collection_tasks;
-create policy "service_role_all_collection_tasks" on collection_tasks
-  for all to service_role using (true) with check (true);
-
-drop policy if exists "service_role_all_submissions" on submissions;
-create policy "service_role_all_submissions" on submissions
-  for all to service_role using (true) with check (true);
+-- Object Storage 버킷은 NCP 콘솔의 Object Storage 화면에서 별도로 생성하세요
+-- (예: "upmoo-submissions"). 버킷 이름은 NCP_STORAGE_BUCKET 환경변수로 지정합니다.
