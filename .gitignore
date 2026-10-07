@@ -27,3 +27,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# MDM server
+/mdm/server/node_modules/
+/mdm/server/data/

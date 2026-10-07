@@ -5,6 +5,10 @@ Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 �
 데이터베이스와 파일 저장소는 **네이버 클라우드 플랫폼(NCP)**의 **Cloud DB for PostgreSQL**과
 **Object Storage**를 사용합니다.
 
+> **학생 기기 통제 및 수업 관리 시스템(MDM)**은 [`mdm/`](mdm/README.md) 폴더에 별도 모듈로 포함되어 있습니다
+> (Node.js 실시간 서버 + 교사 웹 콘솔 + Android 학생 에이전트). 상시 WebSocket 연결이 필요해 Vercel이 아닌
+> 별도 서버에서 실행합니다.
+
 ## 기술 스택
 
 - **Next.js 15 (App Router)** — 프론트엔드 + API Routes(서버리스 함수), 배포: Vercel

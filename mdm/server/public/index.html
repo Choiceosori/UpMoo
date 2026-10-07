@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Class Control — 교사 콘솔</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Smart Class Control <span class="muted">MDM</span></div>
+      <div id="topbar-right"></div>
+    </header>
+
+    <main id="app"></main>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+
+    <!-- 학생 화면 확대 / 원격 제어 -->
+    <dialog id="student-modal" class="modal wide">
+      <div class="modal-head">
+        <h2 id="sm-title"></h2>
+        <button class="btn ghost" data-close>닫기 ✕</button>
+      </div>
+      <div class="sm-body">
+        <div class="sm-screen-wrap">
+          <img id="sm-screen" class="sm-screen" alt="학생 화면" draggable="false" />
+          <div id="sm-empty" class="sm-empty">화면 수신 대기 중… (학생 앱에서 화면 공유 권한이 필요합니다)</div>
+        </div>
+        <aside class="sm-side">
+          <label class="switch"><input type="checkbox" id="sm-remote" /> 원격 제어 모드</label>
+          <p class="hint">켜면 화면을 클릭(탭)·드래그(스와이프)·길게 누르기로 학생 기기를 조작합니다.</p>
+          <div class="btn-row">
+            <button class="btn" data-remote="back">◀ 뒤로</button>
+            <button class="btn" data-remote="home">● 홈</button>
+            <button class="btn" data-remote="recents">▣ 최근 앱</button>
+          </div>
+          <hr />
+          <div class="btn-row">
+            <button class="btn danger" id="sm-lock">화면 잠금</button>
+            <button class="btn" id="sm-unlock">잠금 해제</button>
+          </div>
+          <button class="btn" id="sm-present">이 학생 화면을 전체에 공유 (발표 모드)</button>
+          <button class="btn" id="sm-url">이 학생에게 URL 열기</button>
+          <hr />
+          <dl id="sm-info" class="info"></dl>
+          <button class="btn ghost danger" id="sm-remove">학급에서 제거</button>
+        </aside>
+      </div>
+    </dialog>
+
+    <dialog id="join-modal" class="modal">
+      <div class="modal-head">
+        <h2>학생 참여 안내</h2>
+        <button class="btn ghost" data-close>닫기 ✕</button>
+      </div>
+      <div class="join-body">
+        <div class="pin-big" id="jm-pin"></div>
+        <div id="jm-qr" class="qr"></div>
+        <p>학생 기기 카메라로 QR을 스캔하거나, UpMoo MDM 앱에서 아래 서버 주소와 PIN을 입력하세요.</p>
+        <code id="jm-server"></code>
+        <code id="jm-url"></code>
+      </div>
+    </dialog>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+    <script src="app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Smart Class — 학생 참여</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      main {
+        max-width: 520px;
+      }
+      .full {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        text-align: center;
+      }
+      #lock {
+        background: #121a2b;
+        color: #fff;
+        font-size: clamp(24px, 6vw, 56px);
+        font-weight: 800;
+      }
+      #lock .sub {
+        font-size: 14px;
+        font-weight: 400;
+        color: #8fa0c4;
+      }
+      #viewer {
+        background: #000;
+      }
+      #viewer img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+      }
+      #viewer .label {
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+      }
+      form {
+        display: grid;
+        gap: 10px;
+      }
+      .rules li {
+        margin-bottom: 4px;
+      }
+      .result-ok {
+        color: var(--ok);
+      }
+      .result-bad {
+        color: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">Smart Class <span class="muted">학생</span></div>
+      <div id="status"></div>
+    </header>
+    <main id="app"></main>
+
+    <div id="lock" class="full" hidden>
+      <div>🔒</div>
+      <div id="lock-text">선생님을 보세요</div>
+      <div class="sub">선생님이 화면을 잠갔습니다</div>
+    </div>
+    <div id="viewer" class="full" hidden>
+      <span class="label" id="viewer-label">선생님 화면</span>
+      <img id="viewer-img" alt="공유 화면" />
+    </div>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <script src="student.js" type="module"></script>
+  </body>
+</html>

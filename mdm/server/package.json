@@ -1,0 +1,19 @@
+{
+  "name": "upmoo-mdm-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Smart Class Control MDM — 실시간 중계/정책 서버 + 교사 웹 콘솔",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
