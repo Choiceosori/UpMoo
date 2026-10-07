@@ -5,32 +5,22 @@ import { Auth, randomSecret } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { createHandler } from "./http.js";
 import { Hub } from "./hub.js";
-import { Scheduler } from "./scheduler.js";
+import { setLoginSites } from "./lesson.js";
 import { Store } from "./store.js";
 
 export function createServer(config = loadConfig()) {
-  const store = new Store(config.dataFile).load();
+  const store = new Store(config.dataDir).load();
+  setLoginSites(config.loginSites);
 
-  let secret = config.secret || store.getMeta("secret");
-  if (!secret) {
-    secret = randomSecret();
-    store.setMeta("secret", secret);
-  }
-  if (!config.teacherPassword) {
-    config.teacherPassword = randomSecret(6);
-    console.warn(`[mdm] MDM_TEACHER_PASSWORD가 설정되지 않아 임시 비밀번호를 생성했습니다: ${config.teacherPassword}`);
+  let secret = config.secret || store.meta("secret");
+  if (!secret) secret = store.meta("secret", randomSecret());
+  if (!config.adminPassword) {
+    config.adminPassword = randomSecret(6);
+    console.warn(`[woori] MDM_ADMIN_PASSWORD가 없어 임시 관리자 비밀번호를 만들었어요: ${config.adminPassword}`);
   }
 
   const auth = new Auth(secret);
   const hub = new Hub({ store, auth, config });
-  const scheduler = new Scheduler({
-    store,
-    hub,
-    timezone: config.timezone,
-    intervalMs: config.schedulerIntervalMs,
-  });
-  hub.onScheduleChanged = () => scheduler.tick();
-
   const server = http.createServer(createHandler({ store, hub, auth, config }));
   hub.attach(server);
 
@@ -39,15 +29,12 @@ export function createServer(config = loadConfig()) {
     store,
     hub,
     auth,
-    scheduler,
     config,
     async listen() {
       await new Promise((resolve) => server.listen(config.port, config.host, resolve));
-      scheduler.start();
       return server.address();
     },
     async close() {
-      scheduler.stop();
       hub.close();
       await new Promise((resolve) => server.close(resolve));
       store.flush();
@@ -62,13 +49,13 @@ function lanAddresses() {
     .map((i) => i.address);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const app = createServer();
   const { port } = await app.listen();
-  console.log(`[mdm] 서버 실행 중 — 포트 ${port}`);
+  console.log(`[woori] ${app.config.appName} 실행 중 — 포트 ${port}`);
   for (const ip of lanAddresses()) {
-    console.log(`  교사 콘솔:   http://${ip}:${port}/`);
-    console.log(`  학생 에이전트 서버 주소: ws://${ip}:${port}/ws`);
+    console.log(`  선생님 화면: http://${ip}:${port}/teacher`);
+    console.log(`  학생 입장:   http://${ip}:${port}/`);
   }
   const shutdown = async () => {
     await app.close();

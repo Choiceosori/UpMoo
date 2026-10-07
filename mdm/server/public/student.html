@@ -1,88 +1,52 @@
 <!doctype html>
 <html lang="ko">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Smart Class — 학생 참여</title>
-    <link rel="stylesheet" href="style.css" />
-    <style>
-      main {
-        max-width: 520px;
-      }
-      .full {
-        position: fixed;
-        inset: 0;
-        z-index: 50;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 16px;
-        text-align: center;
-      }
-      #lock {
-        background: #121a2b;
-        color: #fff;
-        font-size: clamp(24px, 6vw, 56px);
-        font-weight: 800;
-      }
-      #lock .sub {
-        font-size: 14px;
-        font-weight: 400;
-        color: #8fa0c4;
-      }
-      #viewer {
-        background: #000;
-      }
-      #viewer img {
-        max-width: 100%;
-        max-height: 100%;
-        object-fit: contain;
-      }
-      #viewer .label {
-        position: absolute;
-        top: 10px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.15);
-        color: #fff;
-        padding: 4px 12px;
-        border-radius: 999px;
-        font-size: 12px;
-      }
-      form {
-        display: grid;
-        gap: 10px;
-      }
-      .rules li {
-        margin-bottom: 4px;
-      }
-      .result-ok {
-        color: var(--ok);
-      }
-      .result-bad {
-        color: var(--danger);
-      }
-    </style>
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="brand">Smart Class <span class="muted">학생</span></div>
-      <div id="status"></div>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0459aa">
+  <title>우리반 수업</title>
+  <link rel="icon" href="/brand/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="student">
+  <!-- 들어오기 -->
+  <main id="join" class="join" hidden>
+    <div class="join-card">
+      <img src="/brand/mark.svg" alt="" width="56" height="56">
+      <h1>우리반 수업</h1>
+      <div id="stepCode">
+        <p>선생님이 알려 준 <b>방 코드 4자리</b>를 눌러요</p>
+        <div class="code-boxes" id="codeBoxes" aria-live="polite"><span></span><span></span><span></span><span></span></div>
+        <div class="keypad" id="keypad"></div>
+      </div>
+      <div id="stepSeat" hidden>
+        <p id="seatLead"></p>
+        <div class="seat-grid" id="seatGrid"></div>
+        <p class="hint">흐린 번호는 이미 누가 들어와 있어요. 내 번호가 흐리면 선생님께 말씀드려요.</p>
+        <div class="sheet-f" style="justify-content:center">
+          <button class="btn" id="seatBack" type="button">방 코드 다시 넣기</button>
+          <button class="btn primary big" id="seatGo" type="button" disabled>네, 들어갈래요</button>
+        </div>
+      </div>
+      <p id="joinMsg" class="msg" role="alert"></p>
+    </div>
+  </main>
+
+  <!-- 수업 -->
+  <div id="sapp" class="s-app" hidden>
+    <header class="s-top">
+      <span class="s-seat" id="sSeat"></span>
+      <div class="who"><b id="sTitle"></b><small id="sClass"></small></div>
+      <i id="sConn" class="dot" title="연결 상태"></i>
+      <span class="spacer"></span>
+      <button id="exBtn" class="pill" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#search"/></svg>찾아보기</button>
+      <button id="bellBtn" class="pill" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#bell"/></svg>알림 켜기</button>
     </header>
-    <main id="app"></main>
+    <main class="s-main" id="sMain"></main>
+    <footer class="s-bottom" id="sBottom"></footer>
+  </div>
 
-    <div id="lock" class="full" hidden>
-      <div>🔒</div>
-      <div id="lock-text">선생님을 보세요</div>
-      <div class="sub">선생님이 화면을 잠갔습니다</div>
-    </div>
-    <div id="viewer" class="full" hidden>
-      <span class="label" id="viewer-label">선생님 화면</span>
-      <img id="viewer-img" alt="공유 화면" />
-    </div>
-
-    <div id="toasts" class="toasts" aria-live="polite"></div>
-    <script src="student.js" type="module"></script>
-  </body>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="/js/student.js" type="module"></script>
+</body>
 </html>

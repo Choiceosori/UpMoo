@@ -23,17 +23,20 @@ import java.io.ByteArrayOutputStream
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-data class CaptureConfig(
-    val enabled: Boolean = false,
-    val intervalMs: Long = 3000,
-    val maxWidth: Int = 320,
-    val quality: Int = 45,
-)
+/** 화면 한 장을 JPEG(base64)로 */
+fun Bitmap.toJpegBase64(maxWidth: Int, quality: Int = 60): Triple<String, Int, Int> {
+    val scale = min(1f, maxWidth.toFloat() / width)
+    val out = if (scale < 1f) Bitmap.createScaledBitmap(this, (width * scale).roundToInt(), (height * scale).roundToInt(), true) else this
+    val bytes = ByteArrayOutputStream()
+    out.compress(Bitmap.CompressFormat.JPEG, quality, bytes)
+    val result = Triple(Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP), out.width, out.height)
+    if (out !== this) out.recycle()
+    return result
+}
 
 /**
- * MediaProjection으로 화면을 캡처해 JPEG 썸네일을 서버로 전송합니다.
- * 전송 주기/해상도는 서버가 capture_config로 지시합니다
- * (교사가 아무도 보지 않으면 중지, 그리드 보기는 저빈도·저해상도, 확대 보기/발표는 고빈도·고해상도).
+ * 실시간 화면: MediaProjection(학생이 "녹화 또는 전송을 시작할까요?"에서 시작을 누름)으로
+ * 태블릿 화면 전체를 그림으로 보내요. 앱 밖 화면도 보여요.
  */
 class ScreenCaptureService : Service() {
     private lateinit var thread: HandlerThread
@@ -45,40 +48,36 @@ class ScreenCaptureService : Service() {
     private val tick = object : Runnable {
         override fun run() {
             captureOnce()
-            val c = config
-            handler.postDelayed(this, if (c.enabled && c.intervalMs > 0) c.intervalMs else IDLE_POLL_MS)
+            handler.postDelayed(this, intervalMs.coerceAtLeast(100))
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        thread = HandlerThread("screen-capture").also { it.start() }
+        thread = HandlerThread("projection").also { it.start() }
         handler = Handler(thread.looper)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = Notification.Builder(this, AgentApp.CHANNEL_SERVICE)
+        val n = Notification.Builder(this, AgentApp.CHANNEL_LESSON)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
-            .setContentTitle("선생님이 화면을 볼 수 있습니다")
-            .setContentText("수업 모니터링을 위해 화면을 공유하고 있습니다")
+            .setContentTitle("선생님이 내 화면을 실시간으로 보는 중")
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            startForeground(2, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         } else {
-            startForeground(NOTIFICATION_ID, notification)
+            startForeground(2, n)
         }
-
-        val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
+        val code = intent?.getIntExtra(EXTRA_CODE, Activity.RESULT_CANCELED) ?: Activity.RESULT_CANCELED
         @Suppress("DEPRECATION")
         val data: Intent? = intent?.getParcelableExtra(EXTRA_DATA)
-        if (resultCode != Activity.RESULT_OK || data == null || projection != null) {
-            if (projection == null) stopSelf()
+        if (projection != null) return START_NOT_STICKY
+        if (code != Activity.RESULT_OK || data == null) {
+            stopSelf()
             return START_NOT_STICKY
         }
-
-        val mpm = service<MediaProjectionManager>()
-        val mp = mpm.getMediaProjection(resultCode, data) ?: run {
+        val mp = service<MediaProjectionManager>().getMediaProjection(code, data) ?: run {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -91,36 +90,19 @@ class ScreenCaptureService : Service() {
             },
             handler,
         )
-        createDisplay(mp)
+        val m = resources.displayMetrics
+        val scale = min(1f, 1280f / m.widthPixels)
+        val w = (m.widthPixels * scale).roundToInt()
+        val h = (m.heightPixels * scale).roundToInt()
+        val r = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2)
+        reader = r
+        display = mp.createVirtualDisplay("woori-live", w, h, m.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, r.surface, null, handler)
         running = true
         handler.post(tick)
         return START_NOT_STICKY
     }
 
-    /** 최대 해상도(포커스 모드 기준)로 한 번 만들어 두고, 전송 시 config.maxWidth로 축소합니다. */
-    private fun createDisplay(mp: MediaProjection) {
-        val metrics = resources.displayMetrics
-        val scale = min(1f, MAX_CAPTURE_WIDTH.toFloat() / metrics.widthPixels)
-        val width = (metrics.widthPixels * scale).roundToInt()
-        val height = (metrics.heightPixels * scale).roundToInt()
-        val r = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        reader = r
-        display = mp.createVirtualDisplay(
-            "upmoo-capture",
-            width,
-            height,
-            metrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            r.surface,
-            null,
-            handler,
-        )
-    }
-
     private fun captureOnce() {
-        val c = config
-        val agent = AgentService.instance ?: return
-        if (!c.enabled || c.intervalMs <= 0) return
         val image = try {
             reader?.acquireLatestImage()
         } catch (e: IllegalStateException) {
@@ -132,21 +114,13 @@ class ScreenCaptureService : Service() {
             val rowPadding = plane.rowStride - pixelStride * image.width
             val padded = Bitmap.createBitmap(image.width + rowPadding / pixelStride, image.height, Bitmap.Config.ARGB_8888)
             padded.copyPixelsFromBuffer(plane.buffer)
-            val cropped = Bitmap.createBitmap(padded, 0, 0, image.width, image.height)
-            val scale = min(1f, c.maxWidth.toFloat() / image.width)
-            val out = if (scale < 1f) {
-                Bitmap.createScaledBitmap(cropped, (image.width * scale).roundToInt(), (image.height * scale).roundToInt(), true)
-            } else {
-                cropped
-            }
-            val bytes = ByteArrayOutputStream()
-            out.compress(Bitmap.CompressFormat.JPEG, c.quality.coerceIn(10, 90), bytes)
-            agent.sendFrame(Base64.encodeToString(bytes.toByteArray(), Base64.NO_WRAP), out.width, out.height)
-            if (out !== cropped) out.recycle()
-            if (cropped !== padded) cropped.recycle()
+            val bmp = Bitmap.createBitmap(padded, 0, 0, image.width, image.height)
+            val (b64, w, h) = bmp.toJpegBase64(maxWidth)
+            if (bmp !== padded) bmp.recycle()
             padded.recycle()
+            sink?.invoke(b64, w, h)
         } catch (e: Exception) {
-            Log.w(TAG, "capture failed", e)
+            Log.w("ScreenCapture", "capture failed", e)
         } finally {
             image.close()
         }
@@ -162,58 +136,39 @@ class ScreenCaptureService : Service() {
         projection?.stop()
         projection = null
         thread.quitSafely()
+        stopped?.invoke()
         super.onDestroy()
     }
 
     companion object {
-        private const val TAG = "ScreenCapture"
-        private const val NOTIFICATION_ID = 2
-        private const val MAX_CAPTURE_WIDTH = 960
-        private const val IDLE_POLL_MS = 1000L
-        const val EXTRA_RESULT_CODE = "resultCode"
-        const val EXTRA_DATA = "data"
+        private const val EXTRA_CODE = "code"
+        private const val EXTRA_DATA = "data"
 
         @Volatile
         var running = false
             private set
 
         @Volatile
-        var config = CaptureConfig()
-            private set
+        var intervalMs = 250L
 
-        fun updateConfig(newConfig: CaptureConfig) {
-            config = newConfig
+        @Volatile
+        var maxWidth = 960
+
+        /** 프레임 받는 곳 (base64, 너비, 높이) — 백그라운드 스레드에서 불려요 */
+        @Volatile
+        var sink: ((String, Int, Int) -> Unit)? = null
+
+        @Volatile
+        var stopped: (() -> Unit)? = null
+
+        fun start(context: Context, code: Int, data: Intent) {
+            context.startForegroundService(
+                Intent(context, ScreenCaptureService::class.java).putExtra(EXTRA_CODE, code).putExtra(EXTRA_DATA, data),
+            )
         }
 
-        fun start(context: Context, resultCode: Int, data: Intent) {
-            val intent = Intent(context, ScreenCaptureService::class.java)
-                .putExtra(EXTRA_RESULT_CODE, resultCode)
-                .putExtra(EXTRA_DATA, data)
-            context.startForegroundService(intent)
+        fun stop(context: Context) {
+            context.stopService(Intent(context, ScreenCaptureService::class.java))
         }
-    }
-}
-
-/** 화면 캡처 동의 대화상자를 띄우기 위한 투명 액티비티 */
-class CapturePermissionActivity : Activity() {
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
-        super.onCreate(savedInstanceState)
-        val mpm = service<MediaProjectionManager>()
-        @Suppress("DEPRECATION")
-        startActivityForResult(mpm.createScreenCaptureIntent(), REQUEST_CODE)
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        @Suppress("DEPRECATION")
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_CODE && resultCode == RESULT_OK && data != null) {
-            ScreenCaptureService.start(this, resultCode, data)
-        }
-        finish()
-    }
-
-    companion object {
-        private const val REQUEST_CODE = 1001
     }
 }

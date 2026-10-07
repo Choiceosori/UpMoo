@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0459aa">
+  <title>학생 앱 설치 · 우리반 수업도우미</title>
+  <meta name="description" content="우리반 수업 안드로이드 앱 설치 방법">
+  <link rel="icon" href="/brand/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    /* app.css는 앱 화면용으로 높이를 100%로 고정해서, 긴 안내 문서에서는 풀어 준다(위쪽 띠가 계속 붙어 있게) */
+    html, body { height: auto; min-height: 100%; }
+    body { font-size: 16px; line-height: 1.7; overscroll-behavior: auto; }
+    a.btn { text-decoration: none; }
+    .g-sec a:not(.btn) { color: var(--sky-700); font-weight: 600; }
+    .g-top { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px; padding: 10px 24px; background: rgba(255, 255, 255, .95); border-bottom: 1px solid var(--line); backdrop-filter: blur(6px); }
+    .g-top .brand b { font-size: 16px; }
+    .g-hero { background: radial-gradient(900px 360px at 20% -20%, var(--sky-50), transparent 70%), var(--panel); border-bottom: 1px solid var(--line); }
+    .g-hero-in { width: min(1120px, 100%); margin: 0 auto; padding: 34px 24px 30px; display: grid; grid-template-columns: auto 1fr; gap: 22px; align-items: center; }
+    .g-hero img { width: 92px; height: 92px; }
+    .g-hero h1 { margin: 0; font-size: 32px; color: var(--navy); line-height: 1.25; }
+    .g-hero p { margin: 6px 0 0; color: var(--ink-2); font-size: 17px; }
+    .g-wrap { width: min(1120px, 100%); margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 32px; align-items: start; }
+    .toc { position: sticky; top: 76px; display: grid; gap: 2px; font-size: 15px; }
+    .toc b { font-size: 13px; color: var(--muted); margin: 0 0 6px 10px; }
+    .toc a { display: block; padding: 6px 10px; border-radius: 8px; color: var(--ink-2); text-decoration: none; font-weight: 600; }
+    .toc a:hover { background: var(--navy-50); color: var(--navy); }
+    main.g-main { display: grid; gap: 22px; min-width: 0; }
+    .g-sec { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 24px 26px; }
+    .g-sec > h2 { margin: 0 0 4px; font-size: 23px; display: flex; align-items: center; gap: 10px; }
+    .g-sec > h2 .i { width: 26px; height: 26px; color: var(--sky-700); }
+    .g-sec > .lead { margin: 0 0 12px; color: var(--ink-2); }
+    .g-sec h3 { margin: 18px 0 6px; font-size: 18px; }
+    .g-sec p { margin: 8px 0; }
+    .g-sec ol, .g-sec ul { margin: 8px 0; padding-left: 1.4em; }
+    .g-sec li { margin: 4px 0; }
+    .g-sec li::marker { color: var(--sky-700); font-weight: 700; }
+    .ui { display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 7px; border: 1px solid var(--line-2); background: #fff; font-weight: 700; font-size: .92em; white-space: nowrap; line-height: 1.6; }
+    .ui .i { width: 15px; height: 15px; }
+    .ui.pri { background: var(--navy); border-color: var(--navy); color: #fff; }
+    .tip, .warn-box { border-radius: 12px; padding: 12px 16px; margin: 12px 0; }
+    .tip { background: var(--sky-50); }
+    .warn-box { background: var(--amber-50); }
+    .tip b:first-child, .warn-box b:first-child { display: block; }
+    .tip b:first-child { color: var(--sky-700); }
+    .warn-box b:first-child { color: var(--amber); }
+    .quick { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 6px 0 0; padding: 0; list-style: none; counter-reset: q; }
+    .quick li { counter-increment: q; background: var(--bg); border-radius: 14px; padding: 14px; margin: 0; display: grid; gap: 4px; align-content: start; }
+    .quick li::before { content: counter(q); width: 30px; height: 30px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 800; }
+    .quick b { font-size: 16px; }
+    .quick span { color: var(--ink-2); font-size: 14px; line-height: 1.5; }
+    table.g-t { width: 100%; border-collapse: collapse; font-size: 15px; margin: 10px 0; }
+    .g-t th, .g-t td { text-align: left; border-bottom: 1px solid var(--line); padding: 8px 10px; white-space: normal; vertical-align: top; position: static; }
+    .g-t th { background: var(--bg); font-size: 14px; }
+    .sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .mode { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+    .mode h4 { margin: 0 0 4px; font-size: 17px; display: flex; gap: 8px; align-items: center; }
+    .mode.good { border-color: var(--sky); background: #f6fcfe; }
+    .g-sec ul.sites { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; padding: 0; list-style: none; }
+    .sites li { margin: 0; padding: 2px 10px; border-radius: 999px; background: var(--bg); font-size: 14px; font-weight: 600; }
+    details.faq { border-bottom: 1px solid var(--line); padding: 10px 0; }
+    details.faq summary { color: var(--ink); font-weight: 700; font-size: 16px; cursor: pointer; }
+    details.faq p { margin: 8px 0 2px; }
+    .kid { border: 2px dashed var(--sky); border-radius: 16px; padding: 18px 20px; }
+    .kid ol { font-size: 18px; }
+    .g-foot { width: min(1120px, 100%); margin: 0 auto; padding: 10px 24px 48px; color: var(--muted); font-size: 14px; }
+    @media (max-width: 900px) {
+      .g-wrap { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
+      .toc { position: static; display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; padding-bottom: 4px; }
+      .toc b { display: none; }
+      .toc a { white-space: nowrap; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; }
+      .quick { grid-template-columns: 1fr 1fr; }
+      .two { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      .g-top { padding: 8px 16px; }
+      .g-top .btn span { display: none; }
+      .g-hero-in { grid-template-columns: 1fr; padding: 24px 16px; gap: 12px; }
+      .g-hero img { width: 64px; height: 64px; }
+      .g-hero h1 { font-size: 26px; }
+      .g-sec { padding: 18px 16px; }
+      .quick { grid-template-columns: 1fr; }
+    }
+    @media print {
+      .g-top, .toc { display: none; }
+      .g-wrap { grid-template-columns: 1fr; }
+      .g-sec { break-inside: avoid; border: 0; padding: 0 0 12px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="g-top">
+    <div class="brand"><img src="/brand/mark.svg" alt=""><div><b>우리반 수업도우미</b><small>학생 앱 설치</small></div></div>
+    <span class="spacer"></span>
+    <a class="btn" href="/guide"><svg class="i" aria-hidden="true"><use href="/icons.svg#help"/></svg><span>사용 안내</span></a>
+  </header>
+  <div class="g-wrap" style="grid-template-columns:1fr">
+    <main class="g-main">
+      <section class="g-sec">
+        <h2><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg>'우리반 수업' 앱 설치 (안드로이드 태블릿)</h2>
+        <p class="lead">앱으로 들어오면 새 창도 앱 안의 탭으로 열리고, 선생님이 학생 화면을 보고 탭을 닫을 수 있어요.</p>
+        <div class="two">
+          <div class="mode good">
+            <h4>QR로 설치</h4>
+            <div id="apkQr" style="max-width:240px"></div>
+            <p>태블릿 카메라로 찍으면 설치 파일을 내려받아요.</p>
+            <p><a class="btn primary" id="apkLink" href="/app/woori-class.apk">설치 파일 내려받기</a></p>
+          </div>
+          <div class="mode">
+            <h4>설치 순서</h4>
+            <ol>
+              <li>내려받은 <b style="display:inline">woori-class.apk</b>를 열어요.</li>
+              <li>'출처를 알 수 없는 앱' 경고가 뜨면 <span class="ui">설정</span> → 이 출처 허용 → 뒤로 와서 <span class="ui">설치</span>.</li>
+              <li>앱을 열고 서버 주소(처음 한 번)와 방 코드, 번호를 넣어요.</li>
+              <li>수업에 들어오면 '앱 고정'을 물어요. <span class="ui">확인</span>을 눌러요.</li>
+              <li>선생님이 화면을 볼 때 "녹화 또는 전송을 시작할까요?"가 뜨면 <span class="ui">시작</span>.</li>
+            </ol>
+          </div>
+        </div>
+        <div class="warn-box"><b>학교 관리자에게</b>
+          설치 파일은 서버의 <code>public/app/woori-class.apk</code>에 두면 이 페이지에서 내려받을 수 있어요. 빌드 방법과 기기를 관리자 모드(Device Owner)로 설정하는 방법은 저장소의 <code>mdm/README.md</code>를 봐 주세요. 관리자 모드로 설정하면 확인 없이 앱이 고정되고, 학생이 앱을 지우거나 안전모드로 우회할 수 없어요.</div>
+      </section>
+    </main>
+  </div>
+  <script type="module">
+    import { qrSvg } from "/js/common.js";
+    const url = new URL("/app/woori-class.apk", location.href).href;
+    qrSvg(url).then((svg) => document.getElementById("apkQr").append(svg));
+  </script>
+</body>
+</html>

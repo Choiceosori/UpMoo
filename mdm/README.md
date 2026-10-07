@@ -1,197 +1,182 @@
-# Smart Class Control MDM — 학생 기기 통제 및 수업 관리 시스템
+# 우리반 수업도우미 — 학생 기기 통제 및 수업 관리 시스템
 
-교실에서 학생 기기(Android 태블릿/스마트폰, PC 브라우저)를 실시간으로 모니터링·제어하는 MDM입니다.
-기획서([`PLAN.md`](PLAN.md))의 3계층 구조를 그대로 따릅니다.
+학생 태블릿과 선생님 화면을 하나로 묶어 활동지·화이트보드·에듀테크 링크·퀴즈를 한 곳에서 보내고 살펴보는
+수업 관리(MDM) 시스템입니다. 기획서([`PLAN.md`](PLAN.md))와, 함께 받은 **'우리반 수업도우미' 사용 안내**와
+**선생님 화면**을 기준으로 다시 만들었습니다.
 
 ```
-[ 교사 웹 콘솔 ]  <── REST + WebSocket ──>  [ MDM 서버 (Node.js) ]  <── WebSocket ──>  [ 학생 에이전트 ]
-  server/public/                              server/src/                                android-agent/ (Android)
-                                                   │                                     server/public/student.html (웹)
-                                             data/mdm.json (정책·학생·기록)
+[ 선생님 화면 /teacher ] ──REST + WebSocket──▶ [ 수업 서버 (Node.js) ] ◀──WebSocket── [ 학생 화면 / ]
+                                                     │                              ▲ 웹 브라우저 또는
+                                             data/ (반·수업·필기·기록)               └ '우리반 수업' 안드로이드 앱(WebView)
 ```
 
-> 기존 UpMoo(Next.js, Vercel)와는 **별도 프로세스**입니다. Vercel 서버리스 함수는 상시 WebSocket 연결을
-> 유지할 수 없기 때문에, MDM 서버는 학교 내 PC/서버 또는 NCP Server(VM)·Docker 등 상시 실행 환경에 띄웁니다.
+> 기존 UpMoo(Next.js, Vercel)와는 **별도 프로세스**입니다. 상시 WebSocket 연결이 필요해 학교 서버/PC,
+> NCP Server(VM), Docker 같은 상시 실행 환경에 띄웁니다.
 
 ## 폴더 구조
 
 ```
 mdm/
-  server/                     # 백엔드 + 교사 콘솔 (의존성: ws 하나)
-    src/index.js              # HTTP/WebSocket 서버 진입점
-    src/hub.js                # 교사 ↔ 학생 실시간 중계 (명령, 화면 프레임, 원격 입력, 화면 전송)
-    src/http.js               # REST API + 정적 파일
-    src/policy.js             # 정책 모델/정규화/웹 필터 판정/프리셋
-    src/scheduler.js          # 교시별 정책 예약, 방과 후 자동 해제
-    src/store.js              # JSON 파일 저장소 (PostgreSQL/Redis로 교체 가능한 인터페이스)
-    src/auth.js               # HMAC 토큰, 비밀번호 비교, 로그인 rate limit
-    public/index.html, app.js # 교사 콘솔
-    public/student.html, .js  # 웹 학생 에이전트 (PC/크롬북/테스트용)
-    test/                     # node:test 단위 + 통합 테스트
-  android-agent/              # Android 학생 에이전트 (Kotlin, minSdk 26)
+  PLAN.md                      # 처음 기획서
+  server/
+    src/index.js               # 서버 시작
+    src/hub.js                 # 실시간 중계: 입장(방 코드+번호), 판서·필기, 링크, 멈춤, 화면 공유·발표, 학생 화면 보기, 모둠, 퀴즈
+    src/http.js                # REST: 로그인(구글·관리자 비밀번호)·사용 신청, 관리, 수업·쪽·활동지 올리기, 링크 확인, 기록·피드백·CSV, 퀴즈
+    src/lesson.js              # 수업 모델(순수 함수): 쪽, 획 검증, 링크 정리(유튜브·패들렛), 카드 상태, 모둠 나누기, 퀴즈 채점, 통계
+    src/store.js               # 파일 저장소 (data/db.json, data/lessons/*.json, data/files/*)
+    src/auth.js                # HMAC 토큰, 구글 ID 토큰 검증(RS256), 로그인 횟수 제한
+    public/teacher.html        # 선생님 화면 (+ js/teacher.js)
+    public/student.html        # 학생 화면: 방 코드 숫자판 → 번호 → 수업 (+ js/student.js)
+    public/guide.html          # 사용 안내 / app.html 학생 앱 설치 / privacy.html 처리방침
+    public/js/common.js        # 판(Board: 쪽 바탕 + 필기 층), 펜 도구, PDF→그림, QR
+    public/css/app.css, icons.svg, brand/mark.svg
+    test/                      # 단위 테스트 + 선생님·학생 WebSocket 통합 테스트
+  android-agent/               # '우리반 수업' 안드로이드 앱 (Kotlin, minSdk 26)
 ```
 
-## 기획서 대비 구현 현황
+## 기능
 
-| 기획서 항목 | 구현 | 위치 |
-|---|---|---|
-| 앱 화이트리스트/블랙리스트 | ✅ 접근성 서비스로 전면 앱 감지 → 즉시 홈으로 튕김 + 위반 보고. Device Owner면 블랙리스트 앱 숨김(`setApplicationHidden`) | `BlockerAccessibilityService.kt`, `DeviceController.kt` |
-| 웹사이트 차단 (도메인/키워드, 학습 사이트만 허용) | ✅ 주요 브라우저(Chrome, 삼성 인터넷, 웨일, Edge, Firefox, Brave, Opera) 주소창 감시 → 뒤로 가기 | `BlockerAccessibilityService.kt`, `policy.js` |
-| 카메라/블루투스/핫스팟 비활성화 | ✅ `setCameraDisabled`, `DISALLOW_BLUETOOTH`, `DISALLOW_CONFIG_TETHERING` | `DeviceController.kt` |
-| 볼륨 고정 / 밝기 고정 | ✅ 볼륨 변경 감지 시 재설정, 밝기는 `setSystemSetting` (DO) | `DeviceController.kt`, `AgentService.kt` |
-| 전원/리부팅 방지, 설정 앱 접근 제한 | ✅ 키오스크 중 전원 메뉴 차단(Lock Task), 안전모드·초기화 금지, 설정 앱은 접근성으로 차단 | 〃 |
-| 락다운(키오스크) 모드 | ✅ 단일 앱 고정 또는 허용 앱 전용 런처. DO면 `startLockTask` + `LOCK_TASK_FEATURE_NONE`(홈·최근 앱·알림창 차단) | `KioskActivity.kt` |
-| 실시간 화면 그리드 뷰 + 이상 행위 경고 | ✅ MediaProjection JPEG 썸네일, 위반 시 타일 빨간 테두리 + 토스트 | `ScreenCaptureService.kt`, `app.js` |
-| 교사 화면 전체 전송 (전자칠판) | ✅ 브라우저 `getDisplayMedia` → 학생 기기 전체 화면 뷰어 | `app.js`, `ScreenViewerActivity.kt` |
-| 학생 화면 공유 (발표 모드) | ✅ 선택 학생 화면을 다른 학생 기기로 중계 | `hub.js` |
-| 원격 제어 | ✅ 확대 화면에서 클릭/드래그/길게 누르기 → `dispatchGesture`, 뒤로/홈/최근 앱 | `BlockerAccessibilityService.kt` |
-| 전체 화면 잠금 ("선생님을 보세요") | ✅ 전체/선택 학생, 재접속·재부팅 후에도 유지 | `LockScreenActivity.kt` |
-| URL 일괄 열기 / 알림 메시지 | ✅ http(s)만 허용, 학생 기기의 웹 정책도 함께 검사 | `hub.js`, `AgentService.kt` |
-| PIN / QR 접속 | ✅ 6자리 PIN, QR(웹 참여 페이지 → Android 앱 딥링크 `upmoo-mdm://join`) | `app.js`, `student.js`, `MainActivity.kt` |
-| 접속 상태 실시간 파악 | ✅ 온라인/오프라인/잠금/키오스크/권한 누락/배터리/현재 앱 | `app.js` |
-| 교시별 자동 정책 + 방과 후 해제 | ✅ 교시 경계에서만 적용(수업 중 교사 수동 변경 유지), 요일·시간대(Asia/Seoul) | `scheduler.js` |
-| 네트워크 끊김 시 정책 유지 | ✅ 정책·잠금 상태를 기기에 저장, 오프라인에서도 계속 적용, 지수 백오프 재연결 | `AgentConfig.kt`, `AgentService.kt` |
-| 리포트 (딴짓 횟수, 접속 기록) | ✅ 기간별 학생 위반/접속 집계, 최근 기록, CSV 다운로드 | `http.js`, `app.js` |
-| 앱 삭제 방지 / 우회 차단 | ✅ DO: 에이전트 `setUninstallBlocked`, 안전모드 부팅 금지. 잠금·키오스크 중 홈/알림창 탈출 시 복귀 | `DeviceController.kt`, `BlockerAccessibilityService.kt` |
-| 네트워크 부하 관리 | ✅ 아무도 안 보면 캡처 중지, 그리드는 3초·320px, 확대/발표만 0.6초·960px, 송신 큐가 밀리면 프레임 폐기 | `hub.js#updateCapture` |
+| 사용 안내 항목 | 구현 |
+|---|---|
+| 로그인 · 사용 신청 · 관리자 승인 | 구글 로그인(Google Identity Services, 서버에서 ID 토큰 서명 검증) + 관리자 비밀번호. 처음 온 선생님은 사용 신청 → 관리자가 반을 골라 승인/거절 |
+| 반 고르기 · 관리 | 반 만들기·이름·삭제, 반별 담당 선생님 체크, 선생님 등록·관리자 지정, 저장 공간, 모든 반 활용 기록 CSV |
+| 학생 들어오기 | 4자리 방 코드 + 번호(로그인 없음), QR(TV 크게), 이미 앉은 번호는 막힘, **입장 잠그기**(새 기기 차단·선생님에게 알림, 들어왔던 기기는 재접속 가능), 자리 비우기 |
+| 반 설정 | 마지막 번호, 빈 번호(전출) 끄기, 이름표 — **이름은 선생님 기기에만 저장**(서버에는 번호만), 엑셀 이름 목록 붙여넣기 |
+| 활동지 · 내 판서 | PDF(쪽마다)·사진 올리기(브라우저에서 pdf.js로 그림 변환), 선생님 판서가 학생 화면에 실시간, 학생 필기는 학생·선생님 화면에만, 따라오기, ← → 쪽 넘기기 |
+| 화이트보드 | 흰 판·모눈·줄 공책, 새 수업을 화이트보드로 시작, "학생 화면도 데려오기" |
+| 링크 보내기 | 서버가 사이트 헤더(X-Frame-Options·CSP)를 확인해 **앱 안에서 열기/새 창으로 열기** 자동 선택, 학생 화면 미리 보기, 유튜브(t= 시작 시각)·패들렛 전용 주소 변환, 로그인 필요(새 창에서 로그인 → 돌아오면 다시 열기), 모두 돌아오기(학생이 연 새 창도 닫기), 최근에 보낸 링크 |
+| 수업 자료(쪽 순서) | 활동지·화이트보드·**링크 쪽** 순서 바꾸기·지우기, 따라오기 중 링크 쪽으로 가면 학생 화면에 열림, 지난 수업(맡은 다른 반 포함)에서 가져오기 |
+| 학생 찾아보기 | 구글 안전 검색·주소를 화면 안 탭(3개)으로, 선생님 링크 쪽 바로 열기, 찾아본 곳이 카드·기록에 남음 |
+| 학생 보기 · 통제 | 카드(초록 수업 화면 / 빨강 깜빡임 앱 벗어남·이탈 n / 하늘색 링크 보는 중·링크로 나감·확인 필요 / 흐림 안 들어옴·연결 끊김), 거르기, 카드 크기, 학생별 필기 미리 보기, 크게 보기(쪽 넘기기, 연 탭·찾아본 곳), **모두 멈춤**("선생님을 봐 주세요") |
+| 화면 공유 | 선생님 화면(크롬·엣지·웨일 `getDisplayMedia`)을 학생 기기로, 학생 화면을 **모두에게 보여 주기**(발표) |
+| 실시간 화면 | 최대 6명, 1명 ≈ 초당 8장 → 6명 ≈ 3장, 한 화면만 크게, 노트북 학생은 '화면 선택·공유' 허용, 앱 학생은 녹화 허용(거절하면 앱 화면 그림으로) |
+| 모둠 활동 | 모둠 나누기(번호 순서·골고루 섞기), 판 바탕(빈 판·모눈·활동지 쪽), 모둠원이 한 판에 함께 쓰기·메모, 선생님 함께 쓰기·이 모둠 멈춤, 산출물 PNG 저장, 지난 모둠 판 이어 쓰기 |
+| 퀴즈 | 객관식·O·X·단답형·서술형, 모든 반 공유, 결과 바로/나중에 보여 주기, 현황판(제출·평균·문제별 정답률·안 낸 학생), 정답 인정·서술형 점수, 지난 결과와 점수 변화(▲%p), 학생별 점수 CSV |
+| 수업 끝내기 · 기록 | 수업 끝내기(학생 화면 "수업이 끝났어요", 방 코드 만료), 끝내지 않고 새 수업도 가능, 활용 기록 표·CSV(결과보고서용 기능별 횟수), 수업 돌아보기(학생 활동·학생 화면·모둠 판), 학생별 피드백 자동 저장, 이 자료로 새 수업 |
+| 학생 앱 '우리반 수업' | 새 창도 앱 안 탭으로(크롬으로 안 나감), 카드에 "앱 · 탭 2" "탭: …", 앱 탭 모두 닫기, 학생 화면 보기(4초마다 작은 그림), 실시간 화면, 구글 로그인 탭(크롬 Custom Tab), 앱 고정(Device Owner면 확인 없이 + 홈·알림창·전원 메뉴 차단, 앱 삭제·안전모드 우회 방지) |
 
 ## 1. 서버 실행
 
-Node.js 20 이상이 필요합니다.
+Node.js 20 이상.
 
 ```bash
 cd mdm/server
 npm install
-MDM_TEACHER_PASSWORD='원하는비밀번호' npm start
+MDM_ADMIN_PASSWORD='관리자비밀번호' MDM_SCHOOL_NAME='○○초등학교' npm start
 ```
 
-시작하면 같은 네트워크에서 접속할 주소가 출력됩니다.
+```
+[woori] 우리반 수업도우미 실행 중 — 포트 8787
+  선생님 화면: http://192.168.0.10:8787/teacher
+  학생 입장:   http://192.168.0.10:8787/
+```
 
-```
-[mdm] 서버 실행 중 — 포트 8787
-  교사 콘솔:   http://192.168.0.10:8787/
-  학생 에이전트 서버 주소: ws://192.168.0.10:8787/ws
-```
+1. `/teacher`에서 관리자 비밀번호로 들어가 **관리 → 반 만들기**, 선생님 이메일 등록·반 배정.
+2. 구글 로그인을 쓰려면 Google Cloud Console에서 **OAuth 클라이언트 ID(웹 애플리케이션)** 를 만들고
+   승인된 자바스크립트 원본에 서버 주소(예: `https://class.school.kr`)를 넣은 뒤 `MDM_GOOGLE_CLIENT_ID`로 줍니다.
+   구글 로그인은 **HTTPS 주소**(또는 `http://localhost`)에서만 동작하므로 학교 밖에서 쓰면 리버스 프록시로 HTTPS를 붙이세요.
 
 Docker:
 
 ```bash
 cd mdm/server
-docker build -t upmoo-mdm .
-docker run -d -p 8787:8787 -v upmoo-mdm-data:/data -e MDM_TEACHER_PASSWORD=... upmoo-mdm
+docker build -t woori-class .
+docker run -d -p 8787:8787 -v woori-data:/data -e MDM_ADMIN_PASSWORD=... -e MDM_SCHOOL_NAME=... woori-class
 ```
 
 ### 환경변수
 
 | 변수 | 기본값 | 설명 |
 |---|---|---|
-| `MDM_TEACHER_PASSWORD` | (임시 생성 후 콘솔 출력) | 교사 콘솔 로그인 비밀번호 |
-| `MDM_PORT` / `PORT` | `8787` | 서버 포트 |
-| `MDM_HOST` | `0.0.0.0` | 바인드 주소 |
-| `MDM_SECRET` | (데이터 파일에 자동 생성) | 토큰 서명 키 |
-| `MDM_DATA_FILE` | `server/data/mdm.json` | 저장 파일 경로 |
-| `MDM_TIMEZONE` | `Asia/Seoul` | 시간표 기준 시간대 |
-| `MDM_GRID_INTERVAL_MS` / `MDM_GRID_MAX_WIDTH` / `MDM_GRID_QUALITY` | `3000` / `320` / `45` | 그리드 썸네일 주기·폭·JPEG 품질 |
-| `MDM_FOCUS_INTERVAL_MS` / `MDM_FOCUS_MAX_WIDTH` / `MDM_FOCUS_QUALITY` | `600` / `960` / `60` | 확대 보기·발표 화면 주기·폭·품질 |
+| `MDM_ADMIN_PASSWORD` | (임시 생성 후 출력) | 관리자 비밀번호 |
+| `MDM_GOOGLE_CLIENT_ID` | (없음 → 구글 로그인 숨김) | Google Identity Services 웹 클라이언트 ID |
+| `MDM_ADMIN_EMAILS` | | 처음부터 관리자인 구글 계정(쉼표) |
+| `MDM_SCHOOL_NAME` / `MDM_APP_NAME` | `우리 학교` / `우리반 수업도우미` | 화면에 보이는 이름 |
+| `MDM_LOGIN_SITES` | | '로그인이 필요해요'를 저절로 켤 도메인(쉼표, 예: 경북AI배움터 도메인) |
+| `MDM_PORT` / `MDM_HOST` | `8787` / `0.0.0.0` | |
+| `MDM_DATA_DIR` | `server/data` | 저장 폴더 |
+| `MDM_SECRET` | (data에 자동 생성) | 토큰 서명 키 |
+| `MDM_TIMEZONE` | `Asia/Seoul` | CSV 날짜 |
+| `MDM_SNAP_INTERVAL_MS` / `MDM_SNAP_MAX_WIDTH` | `4000` / `360` | 학생 화면 보기 |
+| `MDM_LIVE_MAX_WIDTH` | `960` | 실시간 화면 |
+| `MDM_MAX_UPLOAD_BYTES` | `8000000` | 활동지 한 쪽 최대 크기 |
 
 ### 테스트
 
 ```bash
 cd mdm/server
-npm test     # 정책/시간표/인증 단위 테스트 + 실제 WebSocket 교사·학생 통합 시나리오
+npm test   # 링크 정리·획 검증·카드 상태·모둠·퀴즈 채점·구글 토큰 검증 + 실제 WebSocket 통합 시나리오
 ```
 
-## 2. 교사 콘솔 사용법
+통합 시나리오: 관리자 로그인·반·선생님 승인/거절 → 수업 시작(모눈 화이트보드) → 활동지 올리기 → 학생 입장
+(빈 번호·이미 앉은 번호 거부) → 판서/필기/되돌리기 → 따라오기·모두 멈춤 → 앱 벗어남 감지 → 링크 보내기·모두
+돌아오기 → 입장 잠그기(새 기기 거부, 기존 기기 재입장) → 학생 화면 보기 → 모두에게 보여 주기 → 자리 비우기 →
+퀴즈(정답 비공개·채점·정답 인정) → 모둠(그리기·메모·멈춤) → 수업 끝내기 → 활용 기록·돌아보기·피드백·CSV →
+지난 수업 자료로 새 수업.
 
-1. `http://서버주소:8787/` 접속 → 비밀번호로 로그인
-2. **새 수업 만들기** → 6자리 PIN 발급. 상단 `PIN` 칩을 누르면 QR 코드가 표시됩니다.
-3. **실시간 모니터링**: 학생 썸네일 그리드. 체크박스로 일부 학생만 선택해 명령할 수 있습니다.
-   - 화면 잠금/해제, URL 열기, 메시지, 내 화면 전송, 키오스크 모드
-   - 타일 클릭 → 확대 화면, **원격 제어 모드**, 개별 잠금, **발표 모드**(이 학생 화면을 전체 공유)
-4. **기기 통제 정책**: 프리셋(자유/집중/수업/시험) 또는 직접 편집 → 저장 즉시 모든 학생 기기에 적용
-5. **정책 시간표**: 교시별 프리셋 예약, 교시 외 시간 자동 해제
-6. **리포트**: 오늘/7일/전체 기간 학생별 위반·접속 집계, 최근 기록, CSV 다운로드
-
-## 3. 학생 기기 (Android 에이전트)
-
-### 빌드
-
-Android Studio(Ladybug 이상)에서 `mdm/android-agent` 폴더를 열고 실행하거나:
+## 2. 학생 앱 '우리반 수업' (Android)
 
 ```bash
 cd mdm/android-agent
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease   # 또는 Android Studio에서 열어 빌드
 ```
 
-### 기기 설정 순서
+빌드한 APK를 `mdm/server/public/app/woori-class.apk`로 두면 `/app` 페이지의 QR로 학생이 설치할 수 있어요.
 
-1. APK 설치 → **UpMoo 수업 관리** 앱 실행
-2. 서버 주소(`192.168.0.10:8787` 형식도 가능), PIN, 이름/번호 입력 → **수업 참여하기**
-   (교사 콘솔 QR을 스캔하면 웹 참여 페이지의 "앱으로 참여" 버튼으로 서버·PIN이 자동 입력됩니다)
-3. 화면의 **필수 권한**을 모두 허용
-   - 접근성 서비스: 앱·웹 차단, 원격 제어 (필수)
-   - 화면 공유: 교사 모니터링 (Android 정책상 기기를 재부팅하면 다시 허용 필요)
-   - 기기 관리자: 카메라 제한
-   - 배터리 최적화 제외: 백그라운드 연결 유지
+앱은 학생 화면(`/`)을 WebView로 띄우고 `WooriApp` 자바스크립트 다리로 다음을 해요.
 
-### Device Owner 설정 (권장 — 학교 지급 기기)
+| 다리 함수 | 하는 일 |
+|---|---|
+| `setCapture(mode, intervalMs, maxWidth)` | `snap`: 앱 화면을 PixelCopy로 4초마다(허락 창 없음) / `live`: MediaProjection 허락 후 태블릿 전체 화면, 거절하면 앱 화면 / `off` |
+| `openTab(url, title)`, `closeTabs()` | 앱 위쪽 탭(최대 5개). 사이트가 여는 새 창(`window.open`, `target=_blank`)도 탭으로. `accounts.google.com`은 크롬 Custom Tab |
+| `setPinned(bool)` | 수업에 들어오면 앱 고정(`startLockTask`) + 연결 유지용 포그라운드 서비스 |
+| 앱 → 화면 | `window.wooriApp.onFrame(b64,w,h)`, `onTabs(json)`, `onCaptureState(state)` |
 
-하드웨어 제한(블루투스/핫스팟/설치·삭제/안전모드/USB), 완전한 키오스크, 에이전트 삭제 방지, 밝기 고정은
-**Device Owner** 권한이 있어야 동작합니다. 기기에 Google 계정 등 다른 계정이 없는 초기화 직후 상태에서:
+**Device Owner(권장, 학교 지급 기기)**: 초기화 직후 다른 계정이 없는 기기에서
 
 ```bash
-adb install app-debug.apk
+adb install woori-class.apk
 adb shell dpm set-device-owner com.upmoo.mdm.agent/.MdmDeviceAdminReceiver
 ```
 
-대량 배포 시에는 QR 프로비저닝(공장 초기화 화면 6회 탭), Samsung Knox Mobile Enrollment,
-Android Zero-touch 등록을 사용하세요. Device Owner 없이도 접근성 서비스 기반의 앱/웹 차단, 잠금,
-소프트 키오스크(이탈 시 복귀), 모니터링, 원격 제어는 동작합니다.
+→ 앱 고정이 확인 창 없이 되고 홈·최근 앱·알림창·전원 메뉴가 막히며(`LOCK_TASK_FEATURE_NONE`), 앱 삭제와 안전모드
+부팅 우회가 막혀요. 대량 배포는 QR 프로비저닝, Samsung Knox Mobile Enrollment, Zero-touch를 쓰세요.
 
-> 참고: `앱 설치 금지` 제한이 켜져 있으면 에이전트 업데이트 설치도 막히므로 업데이트 전 정책을 "자유"로 바꾸세요.
+## 3. 통신 요약 (WebSocket `/ws`, JSON)
 
-### 웹 에이전트 (PC/크롬북/테스트)
+| 방향 | type |
+|---|---|
+| 학생→서버 | `hello{role:"student",code,seat,deviceId,kind}`, `status{visible,link,page,tab,tabs}`, `ink`/`ink_undo`/`ink_clear`, `gink`/`gmemo`/`gmemo_del`, `link_open`, `explore`, `frame`, `capture_state`, `quiz_submit` |
+| 서버→학생 | `welcome`/`rejected`/`released`/`ended`, `flags{follow,teacherPage,locked,explore}`, `pages`, `title`, `ink`/`ink_set`, `link`, `close_tabs`, `share`/`share_frame`, `capture{mode,intervalMs,maxWidth}`, `group`, `gink`/`gmemo`/…, `quiz` |
+| 선생님→서버 | `hello{role:"teacher",token,classId}`, `set{follow,teacherPage,locked,explore,entryLocked}`, `ink`…, `link_send`/`link_back`, `release_seat`, `close_tabs`, `share_start`/`share_frame`/`share_stop`, `snap`, `live{seats}`, `present{seat}`, `group_set`/`group_start`/`group_stop`/`group_lock`/`gink`/`gmemo`, `quiz_start`/`quiz_reveal`/`quiz_end`/`quiz_accept`/`quiz_score` |
+| 서버→선생님 | `state`(반·수업·자리·실행 상태 전체), `seat`, `flags`, `pages`, `ink`/`ink_set`, `link`, `runtime`, `frame`, `entry_blocked`, `groups`/`group_state`, `quiz_dash` |
 
-`http://서버주소:8787/join?pin=123456` 에서 브라우저로 참여할 수 있습니다. 화면 잠금, 자료(URL) 열기,
-교사 화면 수신, 내 화면 공유(모니터링)가 동작하지만, 브라우저 특성상 다른 앱/탭을 강제로 차단하지는 못합니다.
+## 4. 원본(사용 안내)과 다른 점
 
-## 4. 통신 프로토콜 요약 (WebSocket `/ws`, JSON)
+받은 사용 안내는 Cloudflare(Workers·Durable Objects·Realtime) 위에서 도는 서비스를 설명합니다. 이 저장소의
+구현은 학교 서버에서 도는 Node.js라서 아래가 다르며, `public/guide.html`도 이에 맞게 고쳐 썼습니다.
 
-연결 후 첫 메시지는 `hello`이며, 10초 내 보내지 않으면 연결이 종료됩니다.
+- **저장**: Durable Objects 대신 서버의 `data/` 폴더(JSON + 그림 파일).
+- **실시간 화면 '영상'(WebRTC, Cloudflare Realtime)** 은 넣지 않았어요. 모두 그림(JPEG) 중계이며, 밀린 그림은 버려 늘 최신 화면을 보여요.
+- **"선생님이 불러요" 알림**은 웹 푸시(서버 푸시) 없이, 학생 화면 탭이 살아 있을 때 브라우저 알림으로만 가요.
+- **아이패드 앱**은 없어요(웹 주소로 사용).
+- 학교 이름·교표·저작권 표시는 넣지 않았어요(`MDM_SCHOOL_NAME`으로 학교 이름만 표시).
+- 함께 받은 선생님 화면 HTML(저장된 페이지)은 화면 구성과 요소 이름을 맞추는 데만 참고했고, 저장소에는 넣지 않았어요(브라우저 확장 프로그램 코드가 섞여 있음).
 
-| 방향 | type | 내용 |
-|---|---|---|
-| 학생→서버 | `hello` | `{role:"student", pin, name, number, deviceId, platform, token?}` |
-| 서버→학생 | `welcome` / `rejected` / `removed` | 학생 토큰, 수업명, 현재 정책, 잠금 상태 |
-| 서버→학생 | `policy`, `lock`, `open_url`, `message`, `capture_config`, `remote_input`, `broadcast_start/frame/stop` | |
-| 학생→서버 | `heartbeat` | 현재 앱, 배터리, 키오스크 여부, 권한 상태 (5초) |
-| 학생→서버 | `frame` | base64 JPEG 화면 프레임 |
-| 학생→서버 | `violation` | `{kind:"app"\|"web", target}` |
-| 교사→서버 | `hello` | `{role:"teacher", token}` (`POST /api/login`으로 발급) |
-| 교사→서버 | `subscribe`, `focus`, `command`, `remote_input`, `broadcast_start/frame/stop` | |
-| 서버→교사 | `class_state`, `student_update`, `frame`, `violation`, `broadcast_state`, `student_removed` | |
+## 5. 보안·운영 참고
 
-REST: `POST /api/login`, `GET|POST /api/classes`, `GET|PATCH|DELETE /api/classes/:id`,
-`GET|PUT /api/classes/:id/policy`, `POST /api/classes/:id/policy/preset`, `GET|PUT /api/classes/:id/schedule`,
-`GET /api/classes/:id/report?since=`, `DELETE /api/classes/:id/students/:sid`, `POST /api/classes/:id/reset-violations`
+- 선생님 토큰은 HMAC 서명(14일), 승인이 취소되면 바로 막혀요. 맡은 반만 볼 수 있어요(관리자는 전체).
+- 학생은 방 코드 + 번호 + 기기 값으로 구분하고 이름은 서버에 없어요. 입장 잠그기로 낯선 기기를 막아요.
+- 링크 확인(`/api/link-check`)은 선생님만 쓸 수 있고, 내부망 주소로는 요청하지 않아요(SSRF 방지).
+- 학생 화면 그림은 서버가 중계만 하고 저장하지 않아요. 학생 화면에 보고 있다는 표시가 떠요.
+- 학교 밖에 노출하면 반드시 HTTPS(리버스 프록시)를 쓰세요. 학생 앱은 내부망을 위해 평문 HTTP도 허용합니다.
+- 한 서버 프로세스 기준이에요. 여러 대로 늘리려면 `store.js`를 PostgreSQL(기존 NCP Cloud DB)로, 실시간 중계를 Redis Pub/Sub으로 바꾸세요.
 
-## 5. 보안 및 운영 참고
+## 6. 검증 범위 / 알려진 한계
 
-- 교사 인증은 단일 비밀번호(HMAC 토큰, 12시간) 방식입니다. 여러 교사 계정/학교 단위 권한이 필요하면 기존
-  UpMoo의 학교 코드 모델과 연동하세요.
-- 학교 외부망에 노출할 경우 반드시 리버스 프록시(Nginx 등)로 **HTTPS/WSS**를 적용하세요. 학생 앱은 `wss://`
-  주소도 지원합니다. (내부망 운영을 위해 Android 앱은 평문 `ws://`를 허용하도록 설정되어 있습니다.)
-- 학생 화면이 서버를 거쳐 전송되므로 개인정보 처리 방침에 화면 모니터링 사실과 보관하지 않음(서버는 프레임을
-  저장하지 않고 중계만 함)을 고지하세요. 학생 기기에는 화면 공유 중임을 알리는 상시 알림이 표시됩니다.
-- 저장소는 JSON 파일(단일 프로세스)입니다. 여러 서버 인스턴스로 확장하려면 `store.js`를 PostgreSQL(기존 NCP
-  Cloud DB)로, 실시간 세션 공유는 Redis Pub/Sub으로 교체하세요.
-
-## 6. 알려진 한계 / 다음 단계
-
-- 화면 스트리밍은 MVP 단계의 JPEG 프레임 중계입니다. 수십 명 고화질 동시 시청이 필요하면 WebRTC(SFU)로 전환하세요.
-- 웹 필터링은 브라우저 주소창을 읽는 방식이라 목록에 없는 브라우저/인앱 브라우저는 감지하지 못합니다.
-  화이트리스트 앱 모드로 허용된 브라우저만 쓰게 하거나, Device Owner의 Always-on VPN 기반 DNS 필터링으로 보강하세요.
-- 화면 회전 시 캡처 해상도는 시작 시점 기준으로 유지됩니다.
-- Android 에이전트는 개발 환경에 Android SDK가 없어 APK 빌드까지는 검증하지 못했고, Kotlin 소스는
-  Android 15 프레임워크 클래스(Robolectric android-all)에 대해 컴파일 검증했습니다. 실기기 테스트가 필요합니다.
-- iOS(Apple School Manager + MDM 프로토콜), Windows 에이전트는 범위 밖입니다.
+- 서버: 단위·통합 테스트 11개 통과. 선생님·학생 화면은 Chromium으로 전체 흐름(입장·판서·멈춤·링크·퀴즈·모둠·끝내기·기록)과
+  앱 다리(학생 화면 보기·탭 보고·탭 닫기·실시간)를 자동 점검했어요.
+- 안드로이드 앱: 개발 환경에 Android SDK가 없어 **APK 빌드와 실기기 시험은 하지 못했어요.** Kotlin 소스는 Android 15
+  프레임워크 클래스(Robolectric android-all)로 컴파일 검증했습니다.
+- 앱 안(iframe)에 넣을 수 있는지는 사이트 헤더로 판단해요. 헤더 없이 스크립트로 막는 사이트는 미리 보기로 확인해 주세요.
+- 인터넷이 끊긴 동안 쓴 학생 필기는 화면에는 남지만 서버로 다시 보내지는 않아요.

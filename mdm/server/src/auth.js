@@ -36,12 +36,9 @@ export class Auth {
     }
   }
 
-  issueTeacher(ttlMs) {
-    return this.sign({ role: "teacher", exp: Date.now() + ttlMs });
-  }
-
-  issueStudent(classId, studentId) {
-    return this.sign({ role: "student", classId, studentId });
+  /** email이 null이면 관리자 비밀번호로 들어온 관리자 세션입니다. */
+  issueTeacher({ email = null, admin = false }, ttlMs) {
+    return this.sign({ role: "teacher", email, admin, exp: Date.now() + ttlMs });
   }
 }
 
@@ -74,4 +71,50 @@ export class RateLimiter {
     entry.count += 1;
     return entry.count <= this.limit;
   }
+}
+
+// ---------------------------------------------------------------- Google 로그인 (ID 토큰 검증)
+
+const GOOGLE_CERTS_URL = "https://www.googleapis.com/oauth2/v3/certs";
+let certCache = { keys: [], fetchedAt: 0 };
+
+async function googleKeys(fetchImpl) {
+  if (Date.now() - certCache.fetchedAt < 60 * 60 * 1000 && certCache.keys.length) return certCache.keys;
+  const res = await fetchImpl(GOOGLE_CERTS_URL);
+  if (!res.ok) throw new Error("구글 인증서를 가져오지 못했어요");
+  const { keys } = await res.json();
+  certCache = { keys, fetchedAt: Date.now() };
+  return keys;
+}
+
+/**
+ * Google Identity Services가 준 ID 토큰(JWT, RS256)을 검증하고 이메일·이름을 돌려줍니다.
+ * @returns {Promise<{email:string,name:string}|null>}
+ */
+export async function verifyGoogleIdToken(credential, clientId, { fetchImpl = fetch, keys } = {}) {
+  if (typeof credential !== "string" || !clientId) return null;
+  const parts = credential.split(".");
+  if (parts.length !== 3) return null;
+  let header;
+  let payload;
+  try {
+    header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+  if (header.alg !== "RS256") return null;
+  const jwk = (keys ?? (await googleKeys(fetchImpl))).find((k) => k.kid === header.kid);
+  if (!jwk) return null;
+  const ok = crypto.verify(
+    "RSA-SHA256",
+    Buffer.from(`${parts[0]}.${parts[1]}`),
+    crypto.createPublicKey({ key: jwk, format: "jwk" }),
+    Buffer.from(parts[2], "base64url"),
+  );
+  if (!ok) return null;
+  const issOk = payload.iss === "accounts.google.com" || payload.iss === "https://accounts.google.com";
+  if (!issOk || payload.aud !== clientId || !payload.email || payload.email_verified === false) return null;
+  if (!payload.exp || payload.exp * 1000 < Date.now()) return null;
+  return { email: String(payload.email).toLowerCase(), name: String(payload.name ?? "") };
 }

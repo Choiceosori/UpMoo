@@ -8,19 +8,12 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
-    <!-- 키오스크 런처에서 설치된 학습 앱 목록/아이콘을 표시하기 위한 패키지 가시성 -->
+    <!-- 구글 로그인 탭(크롬 Custom Tab)을 찾기 위한 패키지 가시성 -->
     <queries>
+        <package android:name="com.android.chrome" />
         <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.HOME" />
+            <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
     </queries>
 
@@ -36,13 +29,16 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode"
             android:exported="true"
-            android:launchMode="singleTask">
+            android:launchMode="singleTask"
+            android:lockTaskMode="if_whitelisted"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- 교사 콘솔 QR → 웹 참여 페이지 → upmoo-mdm://join?server=...&pin=... -->
+            <!-- upmoo-mdm://join?server=http://192.168.0.10:8787&c=1234 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -51,65 +47,19 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".LockScreenActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:lockTaskMode="if_whitelisted"
-            android:taskAffinity="com.upmoo.mdm.agent.lock"
-            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
-
-        <activity
-            android:name=".ScreenViewerActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:lockTaskMode="if_whitelisted"
-            android:taskAffinity="com.upmoo.mdm.agent.viewer"
-            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
-
-        <activity
-            android:name=".KioskActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:launchMode="singleTask"
-            android:lockTaskMode="if_whitelisted"
-            android:taskAffinity="com.upmoo.mdm.agent.kiosk"
-            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
-
-        <activity
-            android:name=".CapturePermissionActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-
         <service
-            android:name=".AgentService"
+            android:name=".LessonService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Classroom device management: keeps the realtime connection to the teacher console and enforces class policies." />
+                android:value="Classroom lesson connection: keeps the student's live lesson session with the teacher while the app is pinned." />
         </service>
 
         <service
             android:name=".ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
-
-        <service
-            android:name=".BlockerAccessibilityService"
-            android:exported="false"
-            android:label="@string/app_name"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <receiver
             android:name=".MdmDeviceAdminReceiver"
@@ -123,15 +73,6 @@
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
                 <action android:name="android.app.action.PROFILE_PROVISIONING_COMPLETE" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
     </application>

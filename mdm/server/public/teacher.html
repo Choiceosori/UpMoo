@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0459aa">
+  <meta name="robots" content="noindex">
+  <title>우리반 수업도우미</title>
+  <link rel="icon" href="/brand/mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="teacher">
+  <!-- 로그인 -->
+  <main id="login" class="auth" hidden>
+    <div class="auth-card">
+      <img class="auth-emblem" src="/brand/mark.svg" alt="">
+      <h1 class="auth-title" data-app-name>우리반 수업도우미</h1>
+      <p class="auth-sub"><span data-school></span> 선생님 로그인</p>
+      <div id="gBtn" class="g-btn"></div>
+      <p id="gFirst" class="hint" hidden>처음 쓰는 선생님도 구글로 로그인하면 사용 신청을 보낼 수 있어요.</p>
+      <form id="reqForm" class="req-form" hidden>
+        <p id="reqLead" class="req-lead"></p>
+        <label for="reqName">이름</label>
+        <input id="reqName" maxlength="30" required autocomplete="name">
+        <label for="reqNote">학년·반 또는 하실 말씀(선택)</label>
+        <input id="reqNote" maxlength="60" placeholder="예: 4학년 2반 담임">
+        <button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg> 사용 신청 보내기</button>
+      </form>
+      <p id="gNone" class="hint" hidden>구글 로그인 설정이 아직 안 됐어요. 지금은 관리자 비밀번호로 들어갈 수 있어요.</p>
+      <details id="keyBox" class="key-box">
+        <summary>관리자 비밀번호로 들어가기</summary>
+        <form id="loginForm" class="key-form">
+          <label for="key">관리자 비밀번호</label>
+          <input id="key" type="password" autocomplete="current-password" required>
+          <button class="btn primary" type="submit">들어가기</button>
+        </form>
+      </details>
+      <p id="loginMsg" class="msg" role="alert"></p>
+      <a class="auth-help" href="/guide" target="_blank" rel="noopener">처음이세요? 사용 안내 보기</a>
+      <a class="auth-help" href="/privacy" target="_blank" rel="noopener">개인정보처리방침</a>
+    </div>
+  </main>
+
+  <!-- 반 고르기·관리 -->
+  <main id="home" class="home" hidden>
+    <header class="home-top">
+      <div class="brand"><img src="/brand/mark.svg" alt=""><div><b data-app-name>우리반 수업도우미</b><small data-school></small></div></div>
+      <span class="spacer"></span>
+      <a class="btn ghost" href="/guide" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="/icons.svg#help"/></svg> 사용 안내</a>
+      <button id="reqPill" class="pill live" hidden></button>
+      <span id="meName" class="me-name"></span>
+      <button id="homeLogout" class="btn ghost"><svg class="i" aria-hidden="true"><use href="/icons.svg#logout"/></svg> 로그아웃</button>
+    </header>
+    <section class="home-body">
+      <h1 class="home-h">오늘은 어느 반 수업인가요?</h1>
+      <div id="classList" class="class-list"></div>
+      <p id="noClass" class="empty" hidden></p>
+      <section id="adminBox" class="admin" hidden>
+        <div class="admin-h"><h2>관리</h2><span class="spacer"></span>
+          <a id="allStatsBtn" class="btn" href="#"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> 모든 반 활용 기록 CSV</a></div>
+        <div id="adminRequests" class="panel req-panel" hidden></div>
+        <div class="admin-grid">
+          <div class="panel"><h3>반과 담당 선생님</h3>
+            <form id="addClassForm" class="row">
+              <input id="newClassName" class="grow" maxlength="30" placeholder="새 반 이름 (예: 4학년 2반)" required>
+              <input id="newClassSeats" type="number" min="1" max="40" value="24" style="width:90px" aria-label="마지막 번호">
+              <button class="btn primary" type="submit"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 반 만들기</button>
+            </form>
+            <div id="adminClasses"></div></div>
+          <div class="panel"><h3>로그인할 수 있는 선생님</h3>
+            <p class="hint">여기에 등록한 구글 계정만 로그인할 수 있어요. 등록 안 된 선생님은 로그인 화면에서 사용 신청을 보내고, 위 「사용 신청」에서 승인하면 돼요. 학생은 로그인하지 않아요(방 코드 + 번호).</p>
+            <form id="addTeacherForm" class="row">
+              <input id="newTeacherEmail" class="grow" type="email" placeholder="선생님 구글 이메일" required>
+              <input id="newTeacherName" style="width:120px" maxlength="30" placeholder="이름">
+              <button class="btn" type="submit">등록</button>
+            </form>
+            <div id="adminTeachers"></div></div>
+        </div>
+        <div class="panel"><div class="admin-h"><h3>저장 공간</h3><span class="spacer"></span>
+          <button id="usageBtn" class="btn small"><svg class="i" aria-hidden="true"><use href="/icons.svg#refresh"/></svg> 확인하기</button></div>
+          <p class="hint">활동지 그림·필기·기록이 이 서버에 저장된 크기예요.</p>
+          <div id="adminUsage"></div></div>
+      </section>
+    </section>
+  </main>
+
+  <!-- 수업 화면 -->
+  <div id="tapp" class="t-app" hidden>
+    <aside class="side" aria-label="메뉴">
+      <div class="side-brand"><img src="/brand/mark.svg" alt=""><span>우리반<br>수업도우미</span></div>
+      <nav class="side-nav" role="tablist" aria-label="보기">
+        <button role="tab" data-view="grid" aria-selected="true"><svg class="i" aria-hidden="true"><use href="/icons.svg#grid"/></svg><span>학생 보기</span></button>
+        <button role="tab" data-view="board" aria-selected="false"><svg class="i" aria-hidden="true"><use href="/icons.svg#board"/></svg><span>내 판서</span></button>
+        <button role="tab" data-view="group" aria-selected="false"><svg class="i" aria-hidden="true"><use href="/icons.svg#users"/></svg><span>모둠</span></button>
+        <button role="tab" data-view="quiz" aria-selected="false"><svg class="i" aria-hidden="true"><use href="/icons.svg#quiz"/></svg><span>퀴즈</span></button>
+      </nav>
+      <div class="side-foot">
+        <button id="statsBtn"><svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg><span>활용 기록</span></button>
+        <button id="setBtn"><svg class="i" aria-hidden="true"><use href="/icons.svg#settings"/></svg><span>반 설정</span></button>
+        <a href="/app" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg><span>학생 앱</span></a>
+        <a href="/guide" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="/icons.svg#help"/></svg><span>사용 안내</span></a>
+        <a href="/privacy" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="/icons.svg#shield"/></svg><span>처리방침</span></a>
+      </div>
+    </aside>
+    <div class="t-main">
+      <header class="t-top">
+        <button id="classChip" class="class-chip" title="다른 반으로 바꾸기"><b id="className"></b><svg class="i sm" aria-hidden="true"><use href="/icons.svg#chev-d"/></svg></button>
+        <button id="titleBtn" class="lesson" title="수업 제목 바꾸기"><span class="lesson-l">지금 수업 <svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg></span><b id="title">제목 없음</b></button>
+        <button id="codeBtn" class="code-chip" title="학생 입장 QR 크게 보기"><svg class="i" aria-hidden="true"><use href="/icons.svg#qr"/></svg><span>방 코드</span><b id="code">-</b></button>
+        <span class="presence"><i id="conn" class="dot" title="연결 중"></i><span id="online">0 / 0명</span></span>
+        <span id="modePill" class="pill" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#users"/></svg>모둠 활동 중</span>
+        <button id="quizPill" class="pill" hidden></button>
+        <button id="sharePill" class="pill live" hidden></button>
+        <button id="linkPill" class="pill link" hidden title="보낸 링크 보기·바꾸기"></button>
+        <button id="exToggle" class="pill ex-toggle" aria-pressed="false" title="학생이 앱 안에서 스스로 검색하고 사이트를 열 수 있게 해요"><svg class="i" aria-hidden="true"><use href="/icons.svg#search"/></svg><span>학생 찾아보기 허용</span></button>
+        <button id="entryToggle" class="pill ex-toggle" aria-pressed="false" title="모두 들어온 뒤 켜면, 방 코드를 알아도 새 기기는 들어올 수 없어요(이미 들어온 기기는 끊겨도 다시 들어와요)"><svg class="i" aria-hidden="true"><use href="/icons.svg#lock"/></svg><span>입장 잠그기</span></button>
+        <button id="snapToggle" class="pill ex-toggle" aria-pressed="false" hidden title="우리반 수업 앱으로 들어온 학생의 화면을 4초마다 작게 받아 봐요"><svg class="i" aria-hidden="true"><use href="/icons.svg#eye"/></svg><span>학생 화면 보기 · 0명</span></button>
+        <button id="liveBtn" class="pill ex-toggle live-btn" aria-pressed="false" title="앱·노트북으로 들어온 학생을 골라 화면을 실시간으로 크게 봐요(최대 6명, 발표 수업용)"><svg class="i" aria-hidden="true"><use href="/icons.svg#live"/></svg><span>실시간 화면</span></button>
+        <span class="spacer"></span>
+        <button id="endBtn" class="btn ghost"><svg class="i" aria-hidden="true"><use href="/icons.svg#flag"/></svg> 수업 끝내기</button>
+        <button id="newBtn" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 새 수업</button>
+      </header>
+      <section id="endedBar" class="ended-bar" hidden aria-live="polite">
+        <svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg>
+        <div><b id="endedText">수업이 끝났어요</b><small id="endedSum"></small></div>
+        <span class="spacer"></span>
+        <button id="endedStats" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg> 수업 기록</button>
+        <button id="endedNew" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 새 수업 시작</button>
+      </section>
+
+      <!-- 학생 보기 -->
+      <main id="gridView" class="view tab-view">
+        <div class="view-h">
+          <div id="filters" class="filters" role="group" aria-label="학생 거르기">
+            <button class="filter" data-filter="all" aria-pressed="true">전체 <b data-n="all">0</b></button>
+            <button class="filter" data-filter="here" aria-pressed="false"><i class="dot on"></i>접속 <b data-n="here">0</b></button>
+            <button class="filter link" data-filter="link" aria-pressed="false" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#link"/></svg>링크 <b data-n="link">0</b></button>
+            <button class="filter away" data-filter="away" aria-pressed="false"><i class="dot off"></i>앱 벗어남 <b data-n="away">0</b></button>
+            <button class="filter" data-filter="empty" aria-pressed="false">안 들어옴 <b data-n="empty">0</b></button>
+          </div>
+          <span class="spacer"></span>
+          <div class="seg" role="group" aria-label="카드 크기">
+            <button data-size="s" aria-pressed="false">작게</button><button data-size="m" aria-pressed="true">보통</button><button data-size="l" aria-pressed="false">크게</button>
+          </div>
+        </div>
+        <section id="setup" class="setup" aria-labelledby="setupTitle">
+          <h2 id="setupTitle"><svg class="i" aria-hidden="true"><use href="/icons.svg#sparkles"/></svg> 수업 준비</h2>
+          <ol>
+            <li data-step="pages"><span class="step-n">1</span><div><b>활동지 올리기</b><small>PDF나 사진이 학생 화면에 바로 나타나요</small></div><button class="btn small" id="setupUpload">올리기</button></li>
+            <li data-step="join"><span class="step-n">2</span><div><b>학생 들어오게 하기</b><small>TV에 QR을 띄우면 태블릿 카메라로 찍어요</small></div><button class="btn small" id="setupQr">QR 띄우기</button></li>
+            <li data-step="names"><span class="step-n">3</span><div><b>이름표 넣기(처음 한 번)</b><small>카드에 이름이 보여요. 이 기기에만 저장</small></div><button class="btn small" id="setupNames">이름표</button></li>
+          </ol>
+        </section>
+        <div id="noLesson" class="wait-card" hidden style="margin:40px auto">
+          <img src="/brand/mark.svg" alt="">
+          <b>아직 수업을 시작하지 않았어요</b>
+          <span>'새 수업'을 누르면 방 코드가 생기고 학생들이 들어올 수 있어요.</span>
+          <button class="btn primary" id="noLessonNew"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 새 수업 시작</button>
+        </div>
+        <div id="cards" class="grid" data-size="m"></div>
+      </main>
+
+      <!-- 내 판서 -->
+      <main id="boardView" class="view t-board tab-view" hidden>
+        <div id="tpenWrap"></div>
+        <section id="tlink" class="t-link" hidden aria-labelledby="tlinkTitle">
+          <div class="t-link-h">
+            <svg class="i" aria-hidden="true"><use href="/icons.svg#link"/></svg>
+            <div><b id="tlinkTitle"></b><small id="tlinkHow"></small></div>
+            <span class="spacer"></span>
+            <button id="tlinkOpen" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#external"/></svg> 내 화면에서 열기</button>
+          </div>
+          <p id="tlinkNote" class="t-link-note"></p>
+          <iframe id="tlinkFrame" title="링크 쪽 미리 보기" referrerpolicy="no-referrer"></iframe>
+        </section>
+        <div id="tstage" class="stage"><div class="wait-card" id="twait"><img src="/brand/mark.svg" alt=""><b>활동지가 아직 없어요</b><span>아래 '활동지 올리기'로 PDF나 사진을 보내거나, 빈 화이트보드로 시작해요</span>
+          <button class="btn primary" id="twaitBoard"><svg class="i" aria-hidden="true"><use href="/icons.svg#whiteboard"/></svg> 화이트보드로 시작</button></div></div>
+      </main>
+
+      <!-- 모둠 -->
+      <main id="groupView" class="view tab-view pane" hidden>
+        <div class="pane-h">
+          <h2 id="gStatus">모둠 활동 전</h2>
+          <span class="spacer"></span>
+          <button id="gSetBtn" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#users"/></svg> 모둠 나누기</button>
+          <button id="gSaveBtn" class="btn" disabled><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> 산출물 그림으로 저장</button>
+          <button id="gStopBtn" class="btn" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#stop"/></svg> 모둠 활동 끝내기</button>
+          <button id="gStartBtn" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#play"/></svg> 모둠 활동 시작</button>
+        </div>
+        <p id="gHelp" class="empty pane-help">모둠 활동을 시작하면 학생 태블릿이 모둠 판으로 바뀌어요.<br>같은 모둠 친구들이 한 판에 함께 쓰고 메모를 붙여요. 선생님은 여기서 모둠별로 보고 멈출 수 있어요.</p>
+        <div id="gGrid" class="g-grid"></div>
+      </main>
+
+      <!-- 퀴즈 -->
+      <main id="quizView" class="view tab-view pane" hidden>
+        <div class="pane-h">
+          <h2>퀴즈</h2>
+          <span class="spacer"></span>
+          <button id="qRunsBtn" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#chart"/></svg> 지난 퀴즈 결과</button>
+          <button id="qNewBtn" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 새 퀴즈 만들기</button>
+        </div>
+        <section id="qDash" class="q-dash" hidden></section>
+        <section id="qList" class="q-list"></section>
+      </main>
+
+      <!-- 수업 조종 바 -->
+      <div class="dock" id="dock" role="toolbar" aria-label="수업 조종">
+        <label class="dock-btn upload" id="uploadBtn"><svg class="i" aria-hidden="true"><use href="/icons.svg#upload"/></svg><span>활동지 올리기</span>
+          <input id="file" type="file" accept="application/pdf,image/*" multiple hidden>
+        </label>
+        <button id="boardBtn" class="dock-btn" title="빈 판(흰 판·모눈·줄 공책)을 한 쪽 더해요"><svg class="i" aria-hidden="true"><use href="/icons.svg#whiteboard"/></svg><span>화이트보드</span></button>
+        <button id="linkBtn" class="dock-btn" aria-pressed="false" title="패들렛·경북AI배움터 같은 사이트를 학생 태블릿에 바로 열어요"><svg class="i" aria-hidden="true"><use href="/icons.svg#link"/></svg><span>링크 보내기</span></button>
+        <div class="pager" aria-label="선생님 쪽">
+          <button class="icon-btn" id="tprev" aria-label="이전 쪽" disabled><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-l"/></svg></button>
+          <button id="tpage" class="page-no page-btn" title="수업 자료 보기·순서 바꾸기">- / -</button>
+          <button class="icon-btn" id="tnext" aria-label="다음 쪽" disabled><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-r"/></svg></button>
+        </div>
+        <span class="sep"></span>
+        <button id="followBtn" class="dock-btn" aria-pressed="false" title="학생 화면이 선생님이 보는 쪽을 따라와요"><svg class="i" aria-hidden="true"><use href="/icons.svg#follow"/></svg><span>따라오기</span></button>
+        <button id="lockBtn" class="dock-btn danger" aria-pressed="false" title="학생 화면을 멈추고 '선생님을 봐 주세요'를 띄워요"><svg class="i" aria-hidden="true"><use href="/icons.svg#lock"/></svg><span>모두 멈춤</span></button>
+        <button id="shareBtn" class="dock-btn danger" aria-pressed="false" title="이 컴퓨터 화면을 학생 태블릿에 띄워요"><svg class="i" aria-hidden="true"><use href="/icons.svg#share"/></svg><span>화면 공유</span></button>
+      </div>
+      <p id="upMsg" class="up-msg" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <!-- 새 수업 -->
+  <div id="newLesson" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="newTitleH">
+    <form class="sheet" id="newForm">
+      <div class="sheet-h"><h2 id="newTitleH">새 수업 시작</h2></div>
+      <p class="hint">새 방 코드가 생기고, 학생들은 새 코드로 다시 들어와요. 지금 수업의 기록은 '활용 기록'에 남아요.</p>
+      <label for="newTitle">수업 제목 <small>(선택)</small></label>
+      <input id="newTitle" maxlength="60" placeholder="예: 3교시 수학 · 분수의 덧셈">
+      <label for="newFile">활동지 <small>(선택, 나중에 올려도 돼요)</small></label>
+      <input id="newFile" type="file" accept="application/pdf,image/*" multiple>
+      <label for="newFrom">지난 수업 자료 불러오기 <small>(선택, 활동지·화이트보드·링크 쪽을 그대로)</small></label>
+      <select id="newFrom"><option value="">불러오지 않기</option></select>
+      <label for="newBoard">화이트보드 <small>(선택, 활동지 앞에 빈 판 한 쪽)</small></label>
+      <select id="newBoard">
+        <option value="">넣지 않기</option>
+        <option value="blank">흰 판</option>
+        <option value="grid">모눈</option>
+        <option value="lines">줄 공책</option>
+      </select>
+      <label class="check"><input type="checkbox" id="newQr" checked> 시작하면 QR을 크게 띄우기</label>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#play"/></svg> 수업 시작</button></div>
+    </form>
+  </div>
+
+  <!-- 화이트보드 더하기 -->
+  <div id="boardDlg" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="boardH">
+    <form class="sheet" id="boardForm">
+      <div class="sheet-h"><h2 id="boardH">화이트보드 더하기</h2></div>
+      <p class="hint">빈 판을 한 쪽 더해요. 선생님은 '내 판서'에서 쓰고, 학생은 자기 태블릿에 써요. 학생 필기는 '학생 보기'에서 한눈에 봐요.</p>
+      <div class="board-kinds" role="radiogroup" aria-label="판 모양">
+        <label class="board-kind"><input type="radio" name="bk" value="blank" checked><span class="bk-img blank"></span><b>흰 판</b></label>
+        <label class="board-kind"><input type="radio" name="bk" value="grid"><span class="bk-img grid"></span><b>모눈</b></label>
+        <label class="board-kind"><input type="radio" name="bk" value="lines"><span class="bk-img lines"></span><b>줄 공책</b></label>
+      </div>
+      <label class="check"><input type="checkbox" id="bkFollow" checked> 학생 화면도 이 쪽으로 데려오기(따라오기 켜기)</label>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#plus"/></svg> 더하기</button></div>
+    </form>
+  </div>
+
+  <!-- 수업 제목 바꾸기 -->
+  <div id="titleDlg" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="titleH">
+    <form class="sheet" id="titleForm">
+      <div class="sheet-h"><h2 id="titleH">수업 제목 바꾸기</h2></div>
+      <label for="titleIn">수업 제목</label>
+      <input id="titleIn" maxlength="60" placeholder="예: 3교시 수학 · 분수의 덧셈">
+      <p class="hint">활용 기록에 이 제목으로 남아요.</p>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary">저장</button></div>
+    </form>
+  </div>
+
+  <!-- 링크 보내기 -->
+  <div id="linkDlg" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="linkH">
+    <form class="sheet wide link-sheet" id="linkForm" novalidate>
+      <div class="sheet-h"><h2 id="linkH">링크 보내기</h2><span class="spacer"></span>
+        <a class="btn ghost small" href="/guide#link" target="_blank" rel="noopener"><svg class="i" aria-hidden="true"><use href="/icons.svg#help"/></svg> 도움말</a></div>
+      <div id="linkNow" class="link-now" hidden>
+        <svg class="i" aria-hidden="true"><use href="/icons.svg#link"/></svg>
+        <div><small>지금 학생에게 보낸 링크</small><b id="linkNowTitle"></b><small id="linkNowCount"></small></div>
+        <span class="spacer"></span>
+        <button type="button" id="linkNowOpen" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#external"/></svg> 내 화면에서 열기</button>
+        <button type="button" id="linkNowBack" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#back"/></svg> 모두 돌아오기</button>
+      </div>
+      <div class="link-grid">
+        <div class="link-fields">
+          <label for="linkUrl">주소</label>
+          <div class="url-row"><input id="linkUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://padlet.com/... 주소를 붙여 넣어요">
+            <button type="button" id="linkPaste" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#clipboard"/></svg> 붙여넣기</button></div>
+          <p id="linkNote" class="link-note" role="status"></p>
+          <label for="linkName">학생에게 보일 이름</label>
+          <input id="linkName" maxlength="60" placeholder="예: 패들렛 · 우리 모둠 생각 모으기">
+          <fieldset class="choices how">
+            <legend>여는 방법</legend>
+            <label><input type="radio" name="how" value="in" checked><span><b>앱 안에서 열기</b><small>학생이 우리반 화면을 떠나지 않아요. '모두 멈춤'과 '모두 돌아오기'가 바로 먹혀요.</small></span></label>
+            <label><input type="radio" name="how" value="out"><span><b>새 창으로 열기</b><small>앱 안에서 안 열리는 사이트. 학생이 '열기'를 눌러 새 창으로 가요.</small></span></label>
+            <label class="check login-chk"><input type="checkbox" id="linkLoginChk"><span><b>로그인이 필요해요</b><small>앱 안에서는 로그인이 안 되는 곳(경북AI배움터 등). 학생이 '새 창에서 로그인'을 한 번 누르고 돌아오면 앱 안에서 이어서 해요.</small></span></label>
+          </fieldset>
+          <div id="linkRecentWrap" hidden><h3 class="link-sub">최근에 보낸 링크</h3><div id="linkRecent" class="link-recent"></div></div>
+        </div>
+        <div class="link-prev">
+          <div class="lp-h"><b>학생 화면 미리 보기</b><small>앱 안에서 열 때 이렇게 보여요. 회색 화면이나 오류가 뜨면 '새 창으로 열기'를 골라요.</small></div>
+          <div class="lp-box"><iframe id="linkPrev" title="학생 화면 미리 보기" referrerpolicy="no-referrer" hidden></iframe><p id="linkPrevEmpty" class="lp-empty">주소를 넣으면 여기에 보여요</p></div>
+        </div>
+      </div>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>닫기</button>
+        <button type="submit" class="btn" id="linkAddPage" value="page" title="수업 자료 순서 끝에 링크 쪽으로 넣어 두어요. 그 쪽으로 가면 학생 화면에 열려요."><svg class="i" aria-hidden="true"><use href="/icons.svg#list"/></svg> 수업 자료에 쪽으로 넣기</button>
+        <button type="submit" class="btn primary" id="linkSend" value="now"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg> 지금 학생에게 보내기</button></div>
+    </form>
+  </div>
+
+  <!-- 수업 자료(쪽 순서) -->
+  <div id="pagesDlg" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="pagesH">
+    <div class="sheet wide">
+      <div class="sheet-h"><h2 id="pagesH">수업 자료</h2>
+        <small>이 순서가 학생 화면의 쪽 순서예요. 링크 쪽으로 가면 학생 화면에 그 사이트가 열려요.</small></div>
+      <div class="pages-add">
+        <button type="button" class="btn" id="pgUpload"><svg class="i" aria-hidden="true"><use href="/icons.svg#upload"/></svg> 활동지 올리기</button>
+        <button type="button" class="btn" id="pgBoard"><svg class="i" aria-hidden="true"><use href="/icons.svg#whiteboard"/></svg> 화이트보드</button>
+        <button type="button" class="btn" id="pgLink"><svg class="i" aria-hidden="true"><use href="/icons.svg#link"/></svg> 링크 쪽</button>
+        <button type="button" class="btn" id="pgImport"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> 지난 수업에서 가져오기</button>
+      </div>
+      <ol id="pagesList" class="pages-list"></ol>
+      <div class="sheet-f"><span class="spacer"></span><button class="btn primary" data-close>닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 지난 수업에서 자료 가져오기 -->
+  <div id="importDlg" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="importH">
+    <div class="sheet wide">
+      <div class="sheet-h"><h2 id="importH">지난 수업에서 자료 가져오기</h2>
+        <small>맡은 모든 반의 지난 수업이에요. 가져오면 지금 수업 자료 끝에 붙어요(학생 필기는 옮기지 않아요).</small></div>
+      <div id="importList" class="import-list"></div>
+      <div class="sheet-f"><span class="spacer"></span><button class="btn primary" data-close>닫기</button></div>
+    </div>
+  </div>
+
+  <!-- 수업 돌아보기(학생 활동·피드백) -->
+  <div id="hist" class="modal full" hidden role="dialog" aria-modal="true" aria-labelledby="histTitle">
+    <div class="z-bar">
+      <div class="hist-name"><b id="histTitle"></b><small id="histSub"></small></div>
+      <div class="seg" role="tablist" aria-label="돌아보기">
+        <button role="tab" data-htab="table" aria-selected="true">학생 활동</button><button role="tab" data-htab="work" aria-selected="false">학생 화면</button><button role="tab" data-htab="group" aria-selected="false">모둠 판</button>
+      </div>
+      <span class="spacer"></span>
+      <a id="histCsv" class="btn" href="#"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> CSV</a>
+      <button id="histReuse" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#refresh"/></svg> 이 자료로 새 수업</button>
+      <button id="histClose" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg> 닫기</button>
+    </div>
+    <div id="histBody" class="hist-body"></div>
+  </div>
+
+  <!-- 실시간 화면: 학생 고르기 -->
+  <div id="livePick" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="livePickH">
+    <div class="sheet wide">
+      <div class="sheet-h"><h2 id="livePickH">실시간으로 볼 학생 고르기</h2><span class="spacer"></span><b id="livePickN" class="lv-n"></b></div>
+      <p class="hint">우리반 수업 앱이나 노트북으로 들어온 학생만 볼 수 있어요(노트북은 학생이 '화면 선택·공유'를 눌러 허용해요). 한 명이면 초당 8장 정도로 부드럽고, 여러 명을 고를수록 조금씩 덜 자주 바뀌어요. 학생 화면에는 "선생님이 내 화면을 실시간으로 보는 중"이 보여요.</p>
+      <div id="livePickList" class="lv-pick-list"></div>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="button" id="livePickGo" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#live"/></svg> 실시간으로 보기</button></div>
+    </div>
+  </div>
+
+  <!-- 실시간 화면(발표 화면) -->
+  <div id="liveWall" class="modal full live-wall" hidden role="dialog" aria-modal="true" aria-labelledby="liveTitle">
+    <div class="z-bar">
+      <b id="liveTitle" class="z-name">실시간 화면</b>
+      <span class="hint" style="margin:0">화면을 누르면 그 학생만 크게, 다시 누르면 모두 봐요. TV에 띄워 발표에 써요.</span>
+      <span class="spacer"></span>
+      <button id="liveEdit" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#users"/></svg> 학생 고르기</button>
+      <button id="liveClose" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg> 끝내기</button>
+    </div>
+    <div id="liveGrid" class="lv-grid"></div>
+  </div>
+
+  <!-- 학생 한 명 크게 보기 -->
+  <div id="zoom" class="modal full" hidden role="dialog" aria-modal="true" aria-labelledby="zoomName">
+    <div class="z-bar">
+      <button class="icon-btn" id="zPrevSeat" aria-label="이전 학생"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-l"/></svg></button>
+      <b id="zoomName" class="z-name"></b>
+      <button class="icon-btn" id="zNextSeat" aria-label="다음 학생"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-r"/></svg></button>
+      <span id="zStatus" class="z-status"></span>
+      <span class="spacer"></span>
+      <div class="pager">
+        <button class="icon-btn" id="zPrevPage" aria-label="이전 쪽"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-l"/></svg></button>
+        <span id="zPage" class="page-no"></span>
+        <button class="icon-btn" id="zNextPage" aria-label="다음 쪽"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-r"/></svg></button>
+      </div>
+      <button id="zWorksheet" class="btn" hidden>활동지 필기 보기</button>
+      <button id="zLive" class="btn" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#live"/></svg> 실시간으로 크게</button>
+      <button id="zCloseTabs" class="btn" hidden><svg class="i" aria-hidden="true"><use href="/icons.svg#tabs"/></svg> 앱 탭 모두 닫기</button>
+      <button id="zRelease" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#user"/></svg> 자리 비우기</button>
+      <button id="zClose" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg> 닫기</button>
+    </div>
+    <div class="z-main">
+      <div id="zStage" class="stage"></div>
+      <aside id="zInfo" class="z-info" hidden aria-label="이 학생이 연 링크·찾아본 곳"></aside>
+    </div>
+  </div>
+
+  <!-- 모둠 판 크게 보기 -->
+  <div id="gzoom" class="modal full" hidden role="dialog" aria-modal="true" aria-labelledby="gzName">
+    <div class="z-bar">
+      <button class="icon-btn" id="gzPrev" aria-label="이전 모둠"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-l"/></svg></button>
+      <b id="gzName" class="z-name"></b>
+      <button class="icon-btn" id="gzNext" aria-label="다음 모둠"><svg class="i" aria-hidden="true"><use href="/icons.svg#chev-r"/></svg></button>
+      <span id="gzMembers" class="z-status"></span>
+      <span class="spacer"></span>
+      <button id="gzMemo" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#note"/></svg> 메모 붙이기</button>
+      <button id="gzLock" class="toggle danger" aria-pressed="false">이 모둠 멈춤</button>
+      <button id="gzClose" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#x"/></svg> 닫기</button>
+    </div>
+    <div id="gzTools" style="padding:8px 12px 0"></div>
+    <div id="gzStage" class="stage" style="padding:12px"></div>
+  </div>
+
+  <!-- 방 코드·QR(TV에 띄우기) -->
+  <div id="qr" class="modal full qr-modal" hidden role="dialog" aria-modal="true" aria-label="학생 입장 방 코드">
+    <div class="qr-brand"><img src="/brand/mark.svg" alt=""><b>우리반 수업</b></div>
+    <div class="qr-box">
+      <div id="qrImg" class="qr-img"></div>
+      <div>
+        <p id="qrLabel" class="qr-label">방 코드</p>
+        <p id="qrCode" class="qr-code"></p>
+        <p id="qrUrl" class="qr-url"></p>
+        <p class="qr-help">태블릿 카메라로 QR을 찍거나, 주소에 들어가 방 코드를 눌러요.</p>
+      </div>
+    </div>
+    <button id="qrClose" class="btn primary big qr-close">닫기</button>
+  </div>
+
+  <!-- 활용 기록 -->
+  <div id="stats" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+    <div class="sheet wide">
+      <div class="sheet-h"><h2 id="statsTitle">활용 기록</h2><span class="spacer"></span>
+        <a id="csvBtn" class="btn" href="#"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> 엑셀(CSV)</a><button class="btn primary" data-close>닫기</button></div>
+      <p class="hint">결과보고서의 "솔루션 활용 횟수·기능별 활용 빈도"에 쓸 수 있어요. <b>줄을 누르면 그 수업의 학생 활동(필기·링크·찾아보기·퀴즈)을 돌아보고 피드백을 남겨요.</b> 학생 성취도 변화는 퀴즈의 '지난 퀴즈 결과'에 있어요.</p>
+      <div class="table-wrap"><table id="statsTable"></table></div>
+    </div>
+  </div>
+
+  <!-- 반 설정 -->
+  <div id="settings" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <form class="sheet wide" id="setForm">
+      <div class="sheet-h"><h2 id="setTitle">반 설정</h2></div>
+      <div class="field-row"><label for="seatsIn">마지막 번호</label>
+        <div class="stepper"><button type="button" data-step="-1" aria-label="마지막 번호 줄이기">−</button><input id="seatsIn" type="number" min="1" max="40" required><button type="button" data-step="1" aria-label="마지막 번호 늘리기">+</button></div></div>
+      <div class="sheet-h" style="margin-top:14px"><h3>이름표</h3><small>이 기기에만 저장되고 서버로 보내지 않아요. 엑셀에서 이름 목록을 복사해 1번 칸에 붙여 넣으면 차례로 채워져요.</small></div>
+      <p class="hint">전출 등으로 빈 번호는 체크를 꺼 주세요. 예: 마지막 번호 24, 22번 사용 해제 → 23명이며 23·24번은 그대로예요. 기존 활동 기록은 보존돼요.</p>
+      <p id="rosterSummary" role="status"></p>
+      <div id="namesGrid" class="names-grid"></div>
+      <div class="sheet-f">
+        <button type="button" id="logoutBtn" class="btn ghost"><svg class="i" aria-hidden="true"><use href="/icons.svg#logout"/></svg> 로그아웃</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary">저장</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 모둠 활동 시작 -->
+  <div id="gStart" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="gStartTitle">
+    <form class="sheet" id="gStartForm">
+      <div class="sheet-h"><h2 id="gStartTitle">모둠 활동 시작</h2></div>
+      <fieldset class="choices">
+        <legend>모둠 판 바탕</legend>
+        <label><input type="radio" name="bg" value="blank" checked> 빈 판</label>
+        <label><input type="radio" name="bg" value="grid"> 모눈</label>
+        <label><input type="radio" name="bg" value="page"> 활동지 <select id="gStartPage" aria-label="활동지 쪽" style="width:auto"></select></label>
+      </fieldset>
+      <label id="gContWrap" class="check"><input type="checkbox" id="gCont"> 지난 모둠 판에 이어서 쓰기</label>
+      <p class="hint">모둠 편성은 '모둠 나누기'에서 바꿀 수 있어요.</p>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary">시작</button></div>
+    </form>
+  </div>
+
+  <!-- 모둠 나누기 -->
+  <div id="gSet" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="gSetTitle">
+    <form class="sheet wide" id="gSetForm">
+      <div class="sheet-h"><h2 id="gSetTitle">모둠 나누기</h2><span class="spacer"></span>
+        <label class="inline">모둠 수 <select id="gN"></select></label>
+        <button type="button" id="gOrder" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#order"/></svg> 번호 순서대로</button>
+        <button type="button" id="gShuffle" class="btn"><svg class="i" aria-hidden="true"><use href="/icons.svg#shuffle"/></svg> 골고루 섞기</button></div>
+      <div id="gAssign" class="g-assign"></div>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary">저장</button></div>
+    </form>
+  </div>
+
+  <!-- 퀴즈 만들기 -->
+  <div id="qEdit" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="qEditTitle">
+    <form class="sheet wide" id="qEditForm">
+      <div class="sheet-h"><h2 id="qEditTitle">퀴즈 만들기</h2></div>
+      <label for="qTitle">퀴즈 제목</label>
+      <input id="qTitle" maxlength="80" required placeholder="예: 분수의 덧셈 확인 퀴즈">
+      <div id="qItems" class="q-items"></div>
+      <div class="q-add">
+        <span><b>문제 더하기</b></span>
+        <button type="button" class="btn" data-add="choice"><svg class="i" aria-hidden="true"><use href="/icons.svg#list"/></svg> 객관식</button>
+        <button type="button" class="btn" data-add="ox"><svg class="i" aria-hidden="true"><use href="/icons.svg#check"/></svg> O·X</button>
+        <button type="button" class="btn" data-add="short"><svg class="i" aria-hidden="true"><use href="/icons.svg#edit"/></svg> 단답형</button>
+        <button type="button" class="btn" data-add="essay"><svg class="i" aria-hidden="true"><use href="/icons.svg#note"/></svg> 서술형</button>
+      </div>
+      <p id="qEditMsg" class="msg" role="alert"></p>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary">저장</button></div>
+    </form>
+  </div>
+
+  <!-- 퀴즈 보내기 -->
+  <div id="qStart" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="qStartTitle">
+    <form class="sheet" id="qStartForm">
+      <div class="sheet-h"><h2 id="qStartTitle">퀴즈 보내기</h2></div>
+      <p id="qStartName" class="hint"></p>
+      <fieldset class="choices">
+        <legend>학생에게 결과 보여 주기</legend>
+        <label><input type="radio" name="reveal" value="instant" checked> 제출하면 바로 점수와 정답을 보여 줘요</label>
+        <label><input type="radio" name="reveal" value="later"> 선생님이 '결과 보내기'를 누를 때 보여 줘요</label>
+      </fieldset>
+      <div class="sheet-f"><span class="spacer"></span>
+        <button type="button" class="btn" data-close>취소</button>
+        <button type="submit" class="btn primary"><svg class="i" aria-hidden="true"><use href="/icons.svg#send"/></svg> 보내기</button></div>
+    </form>
+  </div>
+
+  <!-- 지난 퀴즈 결과 -->
+  <div id="qRuns" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="qRunsTitle">
+    <div class="sheet wide">
+      <div class="sheet-h"><h2 id="qRunsTitle">지난 퀴즈 결과</h2><span class="spacer"></span>
+        <a id="qScoresCsv" class="btn" href="#"><svg class="i" aria-hidden="true"><use href="/icons.svg#download"/></svg> 학생별 점수 CSV</a><button class="btn primary" data-close>닫기</button></div>
+      <p class="hint">결과보고서의 "학생 성취도 변화"에 쓸 수 있어요. 같은 퀴즈를 단원 처음과 끝에 보내면 점수 변화를 비교할 수 있어요. 줄을 누르면 자세히 봐요.</p>
+      <div class="table-wrap"><table id="qRunsTable"></table></div>
+      <div id="qRunDetail"></div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="/js/teacher.js" type="module"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ RUN npm ci --omit=dev
 COPY src ./src
 COPY public ./public
 ENV MDM_PORT=8787 \
-    MDM_DATA_FILE=/data/mdm.json
+    MDM_DATA_DIR=/data
 VOLUME ["/data"]
 EXPOSE 8787
 CMD ["node", "src/index.js"]

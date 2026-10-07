@@ -8,34 +8,41 @@ function num(value, fallback) {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+function list(value) {
+  return String(value ?? "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 export function loadConfig(env = process.env) {
   return {
     port: num(env.MDM_PORT ?? env.PORT, 8787),
     host: env.MDM_HOST || "0.0.0.0",
-    // 비워두면 서버 시작 시 무작위 비밀번호를 생성해 콘솔에 출력합니다.
-    teacherPassword: env.MDM_TEACHER_PASSWORD || "",
-    // 비워두면 데이터 파일에 무작위 서명 키를 생성해 저장합니다.
+    schoolName: env.MDM_SCHOOL_NAME || "우리 학교",
+    appName: env.MDM_APP_NAME || "우리반 수업도우미",
+    // 관리자 비밀번호 (구글 로그인 설정 전이나 비상용). 비우면 시작할 때 임시 비밀번호를 만들어 출력합니다.
+    adminPassword: env.MDM_ADMIN_PASSWORD || env.MDM_TEACHER_PASSWORD || "",
+    // Google Identity Services 웹 클라이언트 ID. 비우면 구글 로그인 단추가 숨겨집니다.
+    googleClientId: env.MDM_GOOGLE_CLIENT_ID || "",
+    // 처음부터 관리자인 구글 계정(쉼표로 구분)
+    adminEmails: list(env.MDM_ADMIN_EMAILS),
+    // '로그인이 필요해요'를 저절로 켤 도메인(쉼표로 구분, 예: 경북AI배움터 도메인)
+    loginSites: list(env.MDM_LOGIN_SITES),
     secret: env.MDM_SECRET || "",
-    dataFile: env.MDM_DATA_FILE || path.resolve(here, "../data/mdm.json"),
+    dataDir: env.MDM_DATA_DIR === "" ? "" : env.MDM_DATA_DIR || path.resolve(here, "../data"),
     publicDir: path.resolve(here, "../public"),
     timezone: env.MDM_TIMEZONE || "Asia/Seoul",
-    // WebSocket 한 메시지 최대 크기 (base64 JPEG 프레임 포함)
-    maxMessageBytes: num(env.MDM_MAX_MESSAGE_BYTES, 1_500_000),
-    // 썸네일 전송 주기/해상도 — 30~40명 동시 접속 시 AP 부하를 고려한 기본값
-    capture: {
-      grid: {
-        intervalMs: num(env.MDM_GRID_INTERVAL_MS, 3000),
-        maxWidth: num(env.MDM_GRID_MAX_WIDTH, 320),
-        quality: num(env.MDM_GRID_QUALITY, 45),
-      },
-      focus: {
-        intervalMs: num(env.MDM_FOCUS_INTERVAL_MS, 600),
-        maxWidth: num(env.MDM_FOCUS_MAX_WIDTH, 960),
-        quality: num(env.MDM_FOCUS_QUALITY, 60),
-      },
-    },
-    teacherTokenTtlMs: num(env.MDM_TEACHER_TOKEN_TTL_MS, 12 * 60 * 60 * 1000),
-    schedulerIntervalMs: num(env.MDM_SCHEDULER_INTERVAL_MS, 15_000),
+    maxMessageBytes: num(env.MDM_MAX_MESSAGE_BYTES, 2_000_000),
+    maxUploadBytes: num(env.MDM_MAX_UPLOAD_BYTES, 8_000_000),
+    teacherTokenTtlMs: num(env.MDM_TEACHER_TOKEN_TTL_MS, 14 * 24 * 60 * 60 * 1000),
     pingIntervalMs: num(env.MDM_PING_INTERVAL_MS, 15_000),
+    // 학생 화면 보기(작은 그림) / 실시간 화면
+    snapIntervalMs: num(env.MDM_SNAP_INTERVAL_MS, 4000),
+    snapMaxWidth: num(env.MDM_SNAP_MAX_WIDTH, 360),
+    liveMaxWidth: num(env.MDM_LIVE_MAX_WIDTH, 960),
+    liveMaxSeats: 6,
+    // 학생 화면을 반 모두에게 보여 줄 때(그림) 와이파이가 막히지 않게 0.4초에 한 장
+    presentIntervalMs: 400,
   };
 }

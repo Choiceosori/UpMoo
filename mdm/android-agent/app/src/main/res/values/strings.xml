@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">UpMoo 수업 관리</string>
-    <string name="accessibility_description">수업 중 허용되지 않은 앱·웹사이트 실행을 감지해 차단하고, 선생님의 원격 지원(화면 조작)을 가능하게 합니다. 수업 관리 기능을 위해 반드시 켜야 합니다.</string>
-    <string name="device_admin_description">수업 중 카메라 사용 제한, 앱 삭제 방지 등 기기 통제 정책을 적용합니다.</string>
+    <string name="app_name">우리반 수업</string>
+    <string name="device_admin_description">수업 중 앱 고정과 앱 삭제 방지를 위해 학교가 기기를 관리해요.</string>
 </resources>
