@@ -1,9 +1,10 @@
--- UpMoo: 학교 업무 자료 수합 시스템 DB 스키마 (네이버 클라우드 Cloud DB for PostgreSQL용)
--- NCP 콘솔에서 발급받은 접속 정보로 psql 또는 DBeaver 등으로 접속한 뒤 실행하세요.
+-- UpMoo: 학교 업무 자료 수합 시스템 DB 스키마 (Postgres)
+-- Neon, Vercel Postgres, 또는 다른 관리형 Postgres 서비스의 SQL Editor나
+-- psql로 접속한 뒤 실행하세요.
 --
--- 이 스키마는 Supabase용 schema.sql과 달리 RLS(행 단위 보안) 정책이 없습니다.
--- 이 앱은 PostgREST 같은 공개 API 계층 없이, 서버(API Route)가 DATABASE_URL로
--- 직접 접속해서만 데이터베이스를 사용하므로 RLS 자체가 필요하지 않습니다.
+-- 이 스키마는 RLS(행 단위 보안) 정책이 없습니다. 이 앱은 PostgREST 같은 공개 API
+-- 계층 없이, 서버(API Route)가 DATABASE_URL로 직접 접속해서만 데이터베이스를
+-- 사용하므로 RLS 자체가 필요하지 않습니다.
 
 create extension if not exists "pgcrypto";
 
@@ -63,5 +64,5 @@ create table if not exists submissions (
 create index if not exists idx_submissions_task on submissions(task_id);
 create index if not exists idx_submissions_school on submissions(school_id);
 
--- Object Storage 버킷은 NCP 콘솔의 Object Storage 화면에서 별도로 생성하세요
--- (예: "upmoo-submissions"). 버킷 이름은 NCP_STORAGE_BUCKET 환경변수로 지정합니다.
+-- Object Storage 버킷(예: Cloudflare R2)은 해당 서비스 콘솔에서 별도로 생성하세요
+-- (예: "upmoo-submissions"). 버킷 이름은 S3_BUCKET 환경변수로 지정합니다.

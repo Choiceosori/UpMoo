@@ -9,7 +9,7 @@ function isAdminAuthorized(req: NextRequest): boolean {
 }
 
 /**
- * 네이버 클라우드 Cloud DB for PostgreSQL / Object Storage 연결 상태를 값 노출 없이
+ * Postgres DB / S3 호환 Object Storage(Cloudflare R2 등) 연결 상태를 값 노출 없이
  * 직접 확인합니다(실제 쿼리/HeadBucket 호출). ADMIN_PASSWORD로 보호됩니다.
  */
 export const GET = withApiErrorHandling(async (req: NextRequest) => {
@@ -38,17 +38,18 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
     }
   }
 
-  const accessKey = process.env.NCP_ACCESS_KEY;
-  const secretKey = process.env.NCP_SECRET_KEY;
-  const bucket = process.env.NCP_STORAGE_BUCKET;
-  result.storage.configured = !!accessKey && !!secretKey && !!bucket;
+  const accessKey = process.env.S3_ACCESS_KEY_ID;
+  const secretKey = process.env.S3_SECRET_ACCESS_KEY;
+  const endpoint = process.env.S3_ENDPOINT;
+  const bucket = process.env.S3_BUCKET;
+  result.storage.configured = !!accessKey && !!secretKey && !!endpoint && !!bucket;
   result.storage.bucket = bucket ?? null;
 
   if (result.storage.configured) {
     try {
       const client = new S3Client({
-        region: process.env.NCP_OBJECT_STORAGE_REGION || "kr-standard",
-        endpoint: process.env.NCP_OBJECT_STORAGE_ENDPOINT || "https://kr.object.ncloudstorage.com",
+        region: process.env.S3_REGION || "auto",
+        endpoint,
         forcePathStyle: true,
         credentials: { accessKeyId: accessKey!, secretAccessKey: secretKey! },
       });
@@ -64,17 +65,17 @@ export const GET = withApiErrorHandling(async (req: NextRequest) => {
     verdictParts.push("DATABASE_URL이 설정되지 않았습니다.");
   } else if (!result.database.connected) {
     verdictParts.push(
-      `DB 연결 실패 (호스트: ${result.database.host ?? "?"}). ACG에서 이 서버의 접근을 허용했는지, 접속 정보가 정확한지 확인하세요.`
+      `DB 연결 실패 (호스트: ${result.database.host ?? "?"}). 접속 정보(사용자/비밀번호/호스트)가 정확한지 확인하세요.`
     );
   } else {
     verdictParts.push("DB 연결 정상.");
   }
 
   if (!result.storage.configured) {
-    verdictParts.push("NCP_ACCESS_KEY/NCP_SECRET_KEY/NCP_STORAGE_BUCKET이 설정되지 않았습니다.");
+    verdictParts.push("S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY/S3_ENDPOINT/S3_BUCKET이 설정되지 않았습니다.");
   } else if (!result.storage.connected) {
     verdictParts.push(
-      `Object Storage 연결 실패 (버킷: ${result.storage.bucket}). 인증키와 버킷 이름을 확인하세요.`
+      `Object Storage 연결 실패 (버킷: ${result.storage.bucket}). 인증키, 엔드포인트, 버킷 이름을 확인하세요.`
     );
   } else {
     verdictParts.push("Object Storage 연결 정상.");

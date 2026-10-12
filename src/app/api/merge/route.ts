@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne } from "@/lib/db";
-import { downloadObject } from "@/lib/ncpStorage";
+import { downloadObject } from "@/lib/objectStorage";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
 import { CollectionTask, Submission } from "@/lib/types";

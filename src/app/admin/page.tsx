@@ -154,17 +154,16 @@ export default function AdminPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-slate-800">환경 진단</h2>
             <button onClick={handleDiagnose} disabled={diagnosing} className="btn-secondary text-xs">
-              {diagnosing ? "확인 중..." : "NCP 연결 확인"}
+              {diagnosing ? "확인 중..." : "DB/스토리지 연결 확인"}
             </button>
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Cloud DB for PostgreSQL / Object Storage에 실제로 접속을 시도해 연결 상태를 값 노출
-            없이 확인합니다.
+            DB / Object Storage에 실제로 접속을 시도해 연결 상태를 값 노출 없이 확인합니다.
           </p>
           {diagnostics && (
             <div className="mt-3 space-y-1 rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
               <p>
-                <span className="font-medium">Cloud DB for PostgreSQL:</span>{" "}
+                <span className="font-medium">Postgres DB:</span>{" "}
                 {!diagnostics.database?.configured
                   ? "미설정"
                   : diagnostics.database.connected

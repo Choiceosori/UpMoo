@@ -6,26 +6,29 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-// 네이버 클라우드 플랫폼 Object Storage는 S3 호환 API를 제공하므로
-// AWS SDK v3의 S3Client를 NCP 엔드포인트로 그대로 사용할 수 있습니다.
+// 제출 파일 저장소로 S3 호환 Object Storage(권장: Cloudflare R2)를 사용합니다.
+// R2는 VPC/ACG 같은 네트워크 설정 없이 Access Key/Secret Key 발급만으로 바로
+// 접속 가능하고, 서명(presigned) URL도 S3와 동일하게 지원해 기존 코드를 그대로
+// 재사용할 수 있습니다.
 let client: S3Client | null = null;
 
 function getClient(): S3Client {
   if (client) return client;
 
-  const accessKeyId = process.env.NCP_ACCESS_KEY;
-  const secretAccessKey = process.env.NCP_SECRET_KEY;
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+  const endpoint = process.env.S3_ENDPOINT;
 
-  if (!accessKeyId || !secretAccessKey) {
+  if (!accessKeyId || !secretAccessKey || !endpoint) {
     throw new Error(
-      "NCP_ACCESS_KEY / NCP_SECRET_KEY 환경변수가 설정되지 않았습니다. " +
-        "네이버 클라우드 콘솔 > Object Storage > 인증키 관리에서 발급받은 값을 등록해주세요."
+      "S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY / S3_ENDPOINT 환경변수가 설정되지 않았습니다. " +
+        "Cloudflare R2(또는 다른 S3 호환 스토리지)에서 발급받은 값을 등록해주세요."
     );
   }
 
   client = new S3Client({
-    region: process.env.NCP_OBJECT_STORAGE_REGION || "kr-standard",
-    endpoint: process.env.NCP_OBJECT_STORAGE_ENDPOINT || "https://kr.object.ncloudstorage.com",
+    region: process.env.S3_REGION || "auto",
+    endpoint,
     forcePathStyle: true,
     credentials: { accessKeyId, secretAccessKey },
   });
@@ -34,10 +37,10 @@ function getClient(): S3Client {
 }
 
 function getBucket(): string {
-  const bucket = process.env.NCP_STORAGE_BUCKET;
+  const bucket = process.env.S3_BUCKET;
   if (!bucket) {
     throw new Error(
-      "NCP_STORAGE_BUCKET 환경변수가 설정되지 않았습니다. Object Storage에서 생성한 버킷 이름을 등록해주세요."
+      "S3_BUCKET 환경변수가 설정되지 않았습니다. 생성한 버킷 이름을 등록해주세요."
     );
   }
   return bucket;

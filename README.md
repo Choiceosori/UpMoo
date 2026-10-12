@@ -2,15 +2,15 @@
 
 Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 수합/병합 웹 서비스입니다.
 프론트엔드와 백엔드(Serverless API Routes)가 하나의 Next.js 프로젝트로 통합되어 있어 Vercel에 그대로 배포할 수 있습니다.
-데이터베이스와 파일 저장소는 **네이버 클라우드 플랫폼(NCP)**의 **Cloud DB for PostgreSQL**과
-**Object Storage**를 사용합니다.
+데이터베이스는 일반 Postgres(권장: **Neon**), 파일 저장소는 S3 호환 Object Storage(권장:
+**Cloudflare R2**)를 사용합니다 — 둘 다 VPC/방화벽 설정 없이 API 키 발급만으로 바로 연동됩니다.
 
 ## 기술 스택
 
 - **Next.js 15 (App Router)** — 프론트엔드 + API Routes(서버리스 함수), 배포: Vercel
 - **TypeScript, React, Tailwind CSS**
-- **네이버 클라우드 Cloud DB for PostgreSQL** — `pg`로 직접 접속하는 메타데이터 저장소
-- **네이버 클라우드 Object Storage** — S3 호환 API(`@aws-sdk/client-s3`)로 접근하는 제출 파일 저장소
+- **Postgres** — `pg`로 직접 접속하는 메타데이터 저장소 (권장: Neon, Vercel Postgres도 호환)
+- **S3 호환 Object Storage** — `@aws-sdk/client-s3`로 접근하는 제출 파일 저장소 (권장: Cloudflare R2)
 - **exceljs** — 서버(API Route)에서의 엑셀 병합
 - **xlsx (SheetJS)** — 브라우저에서의 엑셀 파싱/유효성 검사
 - **@hello-pangea/dnd** — 수합 업무 순서 Drag & Drop
@@ -21,7 +21,7 @@ Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 �
 src/
   app/
     layout.tsx, page.tsx, globals.css     # 랜딩(역할·학교 코드 선택) 페이지
-    admin/page.tsx                        # 전체 관리자: 학교 등록/목록/삭제, NCP 연결 진단
+    admin/page.tsx                        # 전체 관리자: 학교 등록/목록/삭제, DB/스토리지 연결 진단
     manager/
       page.tsx                            # 담당자 홈
       classes/page.tsx                    # 학년별 학급 수 등록
@@ -40,13 +40,13 @@ src/
   context/SchoolContext.tsx               # 선택된 학교/역할 정보(로컬 스토리지 유지)
   lib/
     types.ts, filename.ts, clientFileScan.ts
-    db.ts                                 # Cloud DB for PostgreSQL 커넥션 풀 + 쿼리 헬퍼
-    ncpStorage.ts                         # Object Storage 업로드/다운로드/서명 URL (S3 호환)
+    db.ts                                 # Postgres 커넥션 풀 + 쿼리 헬퍼
+    objectStorage.ts                      # Object Storage 업로드/다운로드/서명 URL (S3 호환)
     validators/pii.ts                     # 이름/주민등록번호 패턴 검출
     validators/expenseExcel.ts            # 지출 엑셀 [내용,규격,단위,수량,예상단가] 검증
     excel/mergeGeneral.ts                 # 시트별 분리/추가 병합
     excel/mergeExpense.ts                 # 기존 데이터 하단에 Append 병합
-ncp/schema.sql                            # Cloud DB for PostgreSQL 테이블 생성 스크립트
+db/schema.sql                             # Postgres 테이블 생성 스크립트
 ```
 
 ## 권한 모델
@@ -75,28 +75,31 @@ cp .env.example .env.local   # 값 채우기
 npm run dev
 ```
 
-### 네이버 클라우드 플랫폼(NCP) 준비
+### DB/스토리지 준비
 
-#### 1. Cloud DB for PostgreSQL
+#### 1. Postgres (권장: Neon)
 
-1. NCP 콘솔 → **Cloud DB for PostgreSQL**에서 DB 서버를 생성합니다.
-2. 생성한 DB 서버에서 **공인 도메인(Public Domain)** 접속을 활성화합니다. Vercel 서버리스 함수는
-   NCP VPC 바깥(공인 인터넷)에서 접속하므로, VPC 내부 전용으로만 두면 연결할 수 없습니다.
-3. **ACG(Access Control Group)** 설정에서 PostgreSQL 포트(기본 5432)에 대해 인바운드 접근을
-   허용합니다. Vercel 서버리스 함수는 고정 IP가 아니므로 특정 IP만 허용하기 어렵습니다
-   (Vercel의 유료 Secure Compute/고정 아웃바운드 IP 기능을 쓰지 않는 한, `0.0.0.0/0`을 열어야
-   할 수 있습니다) — 대신 반드시 강력한 비밀번호와 SSL 접속을 사용하세요.
-4. DB/사용자/비밀번호를 생성한 뒤, `psql`이나 DBeaver 등으로 접속해 `ncp/schema.sql`을
-   실행합니다.
-5. `.env.local`의 `DATABASE_URL`에 `postgresql://사용자:비밀번호@공인도메인:5432/DB이름` 형식으로
-   입력합니다.
+가장 쉬운 방법은 **Vercel 대시보드에서 바로 연동**하는 것입니다.
 
-#### 2. Object Storage
+1. Vercel 프로젝트 → **Storage** 탭 → **Create Database** → **Neon (Postgres)** 선택
+   → 생성/연결하면 `DATABASE_URL`(또는 `POSTGRES_URL`)이 프로젝트 환경변수에 자동으로
+   채워집니다. VPC/방화벽 설정이 전혀 필요 없습니다.
+2. (또는) [neon.tech](https://neon.tech)에서 직접 무료 프로젝트를 만들고, 생성된 연결
+   문자열 중 **Pooled connection**(호스트명에 `-pooler`가 붙은 형태 — 서버리스 환경에 적합)을
+   복사해 `.env.local`의 `DATABASE_URL`에 붙여넣습니다.
+3. Neon 콘솔의 SQL Editor(또는 `psql`)로 접속해 `db/schema.sql` 내용을 실행합니다.
 
-1. NCP 콘솔 → **Object Storage**에서 버킷을 생성합니다(예: `upmoo-submissions`).
-2. **인증키 관리**에서 Access Key / Secret Key를 발급합니다.
-3. `.env.local`에 `NCP_ACCESS_KEY`, `NCP_SECRET_KEY`, `NCP_STORAGE_BUCKET`을 입력합니다
-   (엔드포인트/리전은 기본값이 한국(KR) 리전으로 맞춰져 있어 보통 그대로 두면 됩니다).
+#### 2. Object Storage (권장: Cloudflare R2)
+
+1. Cloudflare 대시보드 → **R2** → 버킷 생성(예: `upmoo-submissions`).
+2. **R2 > API 토큰 관리**에서 Access Key ID / Secret Access Key를 발급합니다.
+3. 버킷 설정에서 **S3 API 엔드포인트**를 확인합니다 (`https://<계정ID>.r2.cloudflarestorage.com`
+   형태).
+4. `.env.local`에 `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `S3_ENDPOINT`를
+   입력합니다 (`S3_REGION`은 `auto` 기본값 그대로 두면 됩니다).
+
+> 이 프로젝트는 AWS SDK v3(S3 호환 API)만 사용하므로, R2 대신 다른 S3 호환 스토리지
+> (MinIO, Backblaze B2 등)로도 동일한 환경변수 체계로 바꿔 쓸 수 있습니다.
 
 #### 3. 관리자 비밀번호
 
@@ -105,11 +108,12 @@ npm run dev
 ## Vercel 배포
 
 1. GitHub 저장소를 Vercel에 Import 합니다 (Framework Preset: Next.js — 자동 감지).
-2. Vercel 프로젝트의 **Environment Variables**에 `.env.example`의 항목을 동일하게 등록합니다.
+2. Neon을 Vercel Storage 탭에서 연동했다면 `DATABASE_URL`은 이미 채워져 있습니다. 나머지
+   (`S3_*`, `ADMIN_PASSWORD`)는 **Environment Variables**에 직접 등록합니다.
 3. Deploy — App Router 페이지와 API Routes(서버리스 함수)가 함께 배포됩니다.
 4. 환경변수를 나중에 추가/수정한 경우 반드시 **재배포**해야 반영됩니다.
-5. `/admin` 페이지 로그인 후 "NCP 연결 확인" 버튼으로 DB/Object Storage 접속이 실제로 되는지
-   확인할 수 있습니다.
+5. `/admin` 페이지 로그인 후 "DB/스토리지 연결 확인" 버튼으로 실제 접속이 되는지 확인할 수
+   있습니다.
 
 ## 핵심 기능 흐름
 
@@ -133,15 +137,13 @@ npm run dev
 ## 문제 해결 (Troubleshooting)
 
 - **DB 연결 실패 / `DATABASE_URL이 설정되지 않았습니다`**: Vercel Environment Variables에
-  `DATABASE_URL`을 등록했는지, 재배포했는지 확인하세요. `/admin` → "NCP 연결 확인" 버튼으로
-  실제 연결 여부와 실패 사유를 바로 확인할 수 있습니다.
-- **DB 연결은 되는데 타임아웃/거부됨**: NCP Cloud DB for PostgreSQL의 ACG에서 외부(0.0.0.0/0
-  또는 Vercel 아웃바운드 IP)의 PostgreSQL 포트 접근을 허용했는지, 공인 도메인 접속이 켜져
-  있는지 확인하세요.
-- **`relation "schools" does not exist`류 오류**: `ncp/schema.sql`이 아직 실행되지 않았습니다.
+  `DATABASE_URL`을 등록했는지, 재배포했는지 확인하세요. `/admin` → "DB/스토리지 연결 확인"
+  버튼으로 실제 연결 여부와 실패 사유를 바로 확인할 수 있습니다.
+- **`relation "schools" does not exist`류 오류**: `db/schema.sql`이 아직 실행되지 않았습니다.
   DB에 접속해 전체 내용을 실행하세요.
-- **Object Storage 관련 오류**: `NCP_ACCESS_KEY`/`NCP_SECRET_KEY`/`NCP_STORAGE_BUCKET` 값이
-  정확한지, 버킷이 실제로 존재하는지 확인하세요. `/admin` → "NCP 연결 확인"으로 확인 가능합니다.
+- **Object Storage 관련 오류**: `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`/`S3_ENDPOINT`/
+  `S3_BUCKET` 값이 정확한지, 버킷이 실제로 존재하는지 확인하세요. `/admin` → "DB/스토리지
+  연결 확인"으로 확인 가능합니다.
 - **`Invalid key: ...`(파일 업로드 실패)**: Object Storage의 오브젝트 키에 한글/공백이 포함되면
   거부되는 경우가 있습니다. 실제 저장 경로는 UUID 기반 ASCII 문자열로만 구성하고, 한글이 포함된
   원래 파일명은 DB 컬럼(`stored_filename`)에만 보관해 다운로드 시 표시합니다.
@@ -159,9 +161,6 @@ npm run dev
 - **next 번들 postcss**: Next.js가 빌드 도구 내부에 번들한 postcss 버전 관련 경고이며, 프로젝트가
   직접 사용하는 postcss(빌드 시점에만 사용)와는 별개입니다. Next.js 메이저 업그레이드 시 함께
   해소됩니다.
-- **DB 접근 제어**: NCP Cloud DB for PostgreSQL을 외부(Vercel)에서 접속하려면 ACG를 넓게
-  열어야 할 수 있습니다. 강력한 비밀번호 사용, 가능하다면 Vercel의 고정 아웃바운드 IP를 발급받아
-  ACG를 해당 IP로만 제한하는 것을 권장합니다.
 
 ## 알려진 한계 (스캐폴드 범위)
 
@@ -171,7 +170,7 @@ npm run dev
   대용량 파일 지원이 필요하면 Object Storage에 클라이언트에서 직접 업로드(Presigned PUT URL)하는
   방식으로 전환하세요.
 - 제출자 식별은 별도 로그인 없이 학교 코드 + 학년/반 조합을 사용하는 경량 모델입니다.
-- `lib/db.ts`의 커넥션 풀은 인스턴스당 최대 3개로 제한되어 있습니다. 트래픽이 많아지면 NCP
-  Cloud DB for PostgreSQL 앞단에 PgBouncer 등 커넥션 풀러를 두는 것을 권장합니다.
+- `lib/db.ts`의 커넥션 풀은 인스턴스당 최대 3개로 제한되어 있습니다. Neon의 Pooled connection을
+  사용하면 이 위에 Neon 자체 풀러가 한 번 더 붙어 안전성이 높아집니다.
 - 학교 삭제 시 DB 레코드는 `on delete cascade`로 정리되지만, Object Storage에 남아있는 해당
   학교의 제출 파일은 자동으로 삭제되지 않습니다.

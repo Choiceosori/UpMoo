@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { query, queryOne } from "@/lib/db";
-import { uploadObject } from "@/lib/ncpStorage";
+import { uploadObject } from "@/lib/objectStorage";
 import { buildSubmissionFilename, extractExtension } from "@/lib/filename";
 import { CollectionTask, FileCategory, Submission } from "@/lib/types";
 import { withApiErrorHandling } from "@/lib/apiHandler";
