@@ -56,7 +56,7 @@ function TaskDetailInner() {
     }
   };
 
-  const handleMerge = async (category: "excel_general" | "excel_expense" | "pdf") => {
+  const handleMerge = async (category: "excel_general" | "excel_expense" | "pdf" | "hwp") => {
     setMerging(category);
     setMergeError(null);
     try {
@@ -70,7 +70,7 @@ function TaskDetailInner() {
         throw new Error(json.error ?? "병합에 실패했습니다.");
       }
       const blob = await res.blob();
-      const fallbackExt = category === "pdf" ? "pdf" : "xlsx";
+      const fallbackExt = category === "pdf" ? "pdf" : category === "hwp" ? "hwp" : "xlsx";
       downloadBlobResponse(
         blob,
         res.headers.get("Content-Disposition"),
@@ -160,9 +160,11 @@ function TaskDetailInner() {
   const hasGeneral = task.allowed_file_types.includes("excel_general");
   const hasExpense = task.allowed_file_types.includes("excel_expense");
   const hasPdf = task.allowed_file_types.includes("pdf");
+  const hasHwp = task.allowed_file_types.includes("hwp");
   const generalCount = submissions.filter((s) => s.file_category === "excel_general").length;
   const expenseCount = submissions.filter((s) => s.file_category === "excel_expense").length;
   const pdfCount = submissions.filter((s) => s.file_category === "pdf").length;
+  const hwpCount = submissions.filter((s) => s.file_category === "hwp").length;
 
   return (
     <div className="space-y-6">
@@ -222,12 +224,13 @@ function TaskDetailInner() {
         {exampleError && <p className="text-sm text-red-500">{exampleError}</p>}
       </div>
 
-      {(hasGeneral || hasExpense || hasPdf || submissions.length > 0) && (
+      {(hasGeneral || hasExpense || hasPdf || hasHwp || submissions.length > 0) && (
         <div className="card space-y-3">
           <h2 className="font-semibold text-slate-800">제출 파일 모아받기</h2>
           <p className="text-sm text-slate-500">
-            엑셀은 하나의 워크북으로, PDF는 페이지를 이어 붙여 하나의 파일로 병합합니다. HWP를
-            포함한 모든 파일은 ZIP으로 한 번에 받을 수 있습니다.
+            엑셀/PDF/HWP는 각각 하나의 파일로 병합하고, 파일 종류 상관없이 전체를 ZIP으로도 받을
+            수 있습니다. HWP 통합은 실험적 기능이니 결과물을 실제 한글 프로그램에서 열어 꼭
+            확인해주세요 — 문제가 있으면 ZIP으로 받아 개별 확인하세요.
           </p>
           <div className="flex flex-wrap gap-3">
             {hasGeneral && (
@@ -259,6 +262,16 @@ function TaskDetailInner() {
                 className="btn-secondary"
               >
                 {merging === "pdf" ? "병합 중..." : `PDF 통합 다운로드 (${pdfCount}건)`}
+              </button>
+            )}
+            {hasHwp && (
+              <button
+                onClick={() => handleMerge("hwp")}
+                disabled={merging !== null || hwpCount === 0}
+                className="btn-secondary"
+                title="실험적 기능: 결과물을 반드시 한글 프로그램에서 열어 확인하세요."
+              >
+                {merging === "hwp" ? "병합 중..." : `HWP 통합 다운로드 (${hwpCount}건, 실험적)`}
               </button>
             )}
             {submissions.length > 0 && (

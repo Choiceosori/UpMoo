@@ -16,6 +16,9 @@ Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 �
 - **jszip** — 파일 종류 무관하게 제출 자료 전체를 ZIP으로 묶어 다운로드
 - **xlsx (SheetJS)** — 브라우저에서의 엑셀 파싱/유효성 검사
 - **@hello-pangea/dnd** — 수합 업무 순서 Drag & Drop
+- **Python + olefile (Vercel Python 함수)** — HWP(한글) 파일 병합 전용. Next.js와 같은
+  Vercel 프로젝트에 `api/hwp_merge.py`로 함께 배포되는 별도 런타임입니다(실험적 기능, 아래
+  "알려진 한계" 참고)
 
 ## 폴더 구조
 
@@ -52,6 +55,12 @@ src/
     validators/expenseExcel.ts            # 지출 엑셀 [내용,규격,단위,수량,예상단가] 검증
     excel/mergeGeneral.ts                 # 시트별 분리/추가 병합
     excel/mergeExpense.ts                 # 기존 데이터 하단에 Append 병합
+    mergeHwp.ts                           # api/hwp_merge.py(Python 함수) 호출 브리지
+api/
+  hwp_merge.py                            # Vercel Python 함수: HWP 병합 진입점
+  _hwplib/cfb.py                          # OLE2 Compound File 라이터(직접 구현)
+  _hwplib/merge.py                        # HWP5 BodyText 섹션 병합 + DocInfo 패치
+requirements.txt                          # api/hwp_merge.py용 Python 의존성(olefile)
 db/schema.sql                             # Postgres 테이블 생성 스크립트
 ```
 
@@ -116,7 +125,10 @@ npm run dev
 1. GitHub 저장소를 Vercel에 Import 합니다 (Framework Preset: Next.js — 자동 감지).
 2. Neon을 Vercel Storage 탭에서 연동했다면 `DATABASE_URL`은 이미 채워져 있습니다. 나머지
    (`S3_*`, `ADMIN_PASSWORD`)는 **Environment Variables**에 직접 등록합니다.
-3. Deploy — App Router 페이지와 API Routes(서버리스 함수)가 함께 배포됩니다.
+3. Deploy — App Router 페이지, Next.js API Routes(Node 서버리스 함수), 그리고
+   `api/hwp_merge.py`(Python 서버리스 함수, `requirements.txt`의 `olefile` 자동 설치)가
+   모두 함께 배포됩니다. 별도 설정은 필요 없습니다(Vercel이 `/api` 아래 `.py` 파일을 자동
+   인식합니다).
 4. 환경변수를 나중에 추가/수정한 경우 반드시 **재배포**해야 반영됩니다.
 5. `/admin` 페이지 로그인 후 "DB/스토리지 연결 확인" 버튼으로 실제 접속이 되는지 확인할 수
    있습니다.
@@ -144,10 +156,16 @@ npm run dev
 - **엑셀(지출) 통합 다운로드**: 동일 양식의 데이터 행을 새 워크북의 기존 데이터 하단에 이어붙입니다(Append).
 - **PDF 통합 다운로드**: pdf-lib로 제출 순서(학년/반 순)대로 페이지를 이어 붙여 하나의 PDF를
   생성합니다.
-- **전체 파일 ZIP 다운로드**: 파일 종류(HWP 포함) 상관없이 해당 업무의 모든 제출 파일을 ZIP
-  하나로 묶어 받습니다. HWP는 한컴의 독점 포맷이라 공개 라이브러리로 내용을 합칠 수 없어
-  PDF/엑셀처럼 단일 파일로 병합하는 기능은 제공하지 않습니다 — ZIP으로 모아 받은 뒤 개별적으로
-  확인해야 합니다.
+- **HWP 통합 다운로드 (실험적)**: `api/hwp_merge.py`(Vercel Python 함수)가 각 파일의
+  BodyText 섹션을 이어 붙이고 DocInfo의 섹션 개수를 패치해 하나의 .hwp로 병합합니다. HWP5는
+  한컴의 독점 바이너리(OLE2 Compound File) 포맷이라 공개된 파서/라이터 라이브러리가 없어서,
+  이 프로젝트는 OLE2 컨테이너 자체를 직접 구현한 라이터(`api/_hwplib/cfb.py`)로 처리합니다 —
+  `olefile`로 구조적 정합성은 충분히 검증했지만, **실제 한글(HWP) 프로그램으로는 검증하지
+  못했습니다.** 모든 제출 파일이 같은 예시 양식에서 비롯된 경우(이 앱의 기본 흐름)에 안전할
+  가능성이 높지만, 사용 전 반드시 실제 한글에서 열어 확인하세요. 컨테이너 크기가 약 7MB를
+  넘거나 문제가 발견되면 아래 "전체 파일 ZIP 다운로드"로 대체하세요.
+- **전체 파일 ZIP 다운로드**: 파일 종류 상관없이 해당 업무의 모든 제출 파일을 ZIP 하나로
+  묶어 받습니다. HWP 통합이 믿을 수 없거나 실패할 때의 안전한 대안입니다.
 - **수정 요청**: 제출 현황 표에서 각 건에 메시지를 남겨 재제출을 요청할 수 있습니다. 제출자
   화면에 즉시 표시되며, 제출자가 재업로드하면 요청이 자동으로 해제됩니다.
 
@@ -186,10 +204,19 @@ npm run dev
 
 ## 알려진 한계 (스캐폴드 범위)
 
-- **HWP/HWPX는 하나의 파일로 병합할 수 없습니다.** 한글과컴퓨터의 독점 포맷이라 공개된 JS/Node
-  라이브러리로 문서 내용을 열어 이어 붙이는 작업 자체가 불가능합니다(한컴 자체 SDK가 필요하며
-  무료/공개가 아닙니다). 대신 ZIP으로 모아 받는 기능을 제공합니다. 단일 파일 병합이 꼭 필요하다면
-  제출자에게 PDF로 변환해 제출하도록 안내하세요.
+- **HWP 통합 병합은 검증되지 않은 실험적 기능입니다.** HWP5 바이너리 포맷(OLE2 Compound
+  File)을 다루는 공개 라이브러리가 없어, `api/_hwplib/cfb.py`가 OLE2 컨테이너 자체를
+  직접 구현합니다. `olefile`로 구조적 정합성(섹터/FAT/디렉터리 트리)은 충분히 테스트했지만,
+  DocInfo의 DocumentProperties 레코드 레이아웃 등 HWP5 세부 사양에 대한 이해가 실제
+  한글 프로그램으로 한 번도 검증되지 않았습니다. 사용 전 반드시 실제 결과물을 한글에서
+  열어 확인하고, 신뢰할 수 없으면 ZIP 다운로드로 대체하세요. 서로 다른 스타일/서식 체계를
+  가진 문서를 섞으면 문단모양/글자모양 참조가 어긋나 깨질 수 있습니다 — 같은 예시 양식에서
+  비롯된 제출물일 때 가장 안전합니다. 컨테이너 크기는 내부적으로 약 7MB(109 FAT 섹터)로
+  제한되어 있으며, 초과 시 조용히 깨지는 대신 명확한 에러를 반환합니다.
+- **HWP 병합은 별도 런타임(Python)에 의존합니다.** `api/hwp_merge.py`는 Vercel Python
+  서버리스 함수로 배포되며(`requirements.txt`의 `olefile` 설치), Next.js의 `/api/merge`가
+  내부적으로 이 함수를 호출합니다. 두 함수 사이의 호출이라도 요청 본문 크기 제한(약 4.5MB,
+  base64 인코딩으로 약 33% 더 커짐)은 동일하게 적용됩니다.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.

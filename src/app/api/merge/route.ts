@@ -4,13 +4,14 @@ import { downloadObject } from "@/lib/objectStorage";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
 import { mergePdfFiles } from "@/lib/mergePdf";
+import { mergeHwpFiles } from "@/lib/mergeHwp";
 import { CollectionTask, Submission } from "@/lib/types";
 import { withApiErrorHandling } from "@/lib/apiHandler";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-type MergeCategory = "excel_general" | "excel_expense" | "pdf";
+type MergeCategory = "excel_general" | "excel_expense" | "pdf" | "hwp";
 
 const MERGE_OUTPUT: Record<MergeCategory, { suffix: string; ext: string; contentType: string }> = {
   excel_general: {
@@ -24,6 +25,7 @@ const MERGE_OUTPUT: Record<MergeCategory, { suffix: string; ext: string; content
     contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   },
   pdf: { suffix: "통합", ext: "pdf", contentType: "application/pdf" },
+  hwp: { suffix: "통합", ext: "hwp", contentType: "application/x-hwp" },
 };
 
 function labelFor(sub: Submission): string {
@@ -32,15 +34,14 @@ function labelFor(sub: Submission): string {
 
 /**
  * 담당자가 "통합 파일 수합"을 클릭했을 때 호출되는 엔드포인트.
- * body: { taskId: string, category: "excel_general" | "excel_expense" | "pdf" }
+ * body: { taskId: string, category: "excel_general" | "excel_expense" | "pdf" | "hwp" }
  * 응답: 병합된 단일 파일 (다운로드용 스트림)
  *
  * - excel_general: 시트별로 분리/추가하여 하나의 워크북으로 병합
  * - excel_expense: 동일 양식 데이터를 기존 데이터 하단에 Append
  * - pdf: 제출 순서(학년/반 순)대로 페이지를 이어 붙여 하나의 PDF로 병합
- *
- * HWP/HWPX는 한컴의 독점 포맷이라 공개 라이브러리로 내용을 이어 붙일 수 없어
- * 이 엔드포인트에서는 지원하지 않습니다(대신 /api/zip으로 모아받을 수 있습니다).
+ * - hwp: api/hwp_merge.py(Vercel Python 함수)를 호출해 BodyText 섹션을 이어
+ *   붙입니다(lib/mergeHwp.ts 주석의 best-effort 한계 참고).
  */
 export const POST = withApiErrorHandling(async (req: NextRequest) => {
   const body = await req.json();
@@ -86,8 +87,10 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
       mergedBuffer = await mergeGeneralExcel(inputs);
     } else if (category === "excel_expense") {
       mergedBuffer = await mergeExpenseExcel(inputs);
-    } else {
+    } else if (category === "pdf") {
       mergedBuffer = await mergePdfFiles(inputs);
+    } else {
+      mergedBuffer = await mergeHwpFiles(inputs, req.nextUrl.origin);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "병합 중 오류가 발생했습니다.";
