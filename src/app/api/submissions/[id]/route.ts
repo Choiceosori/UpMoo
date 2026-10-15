@@ -72,6 +72,9 @@ export const PATCH = withApiErrorHandling<{ params: Promise<{ id: string }> }>(
       columns.stored_filename = storedFilename;
       columns.storage_path = newStoragePath;
       columns.size_bytes = buffer.byteLength;
+      // 새 파일을 올렸으니 기존 수정 요청은 해결된 것으로 보고 자동 해제합니다.
+      columns.correction_requested = false;
+      columns.correction_message = null;
     }
 
     if (piiFlagged !== null) columns.pii_flagged = piiFlagged === "true";

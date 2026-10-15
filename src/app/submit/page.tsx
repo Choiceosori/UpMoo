@@ -179,6 +179,12 @@ function SubmitInner() {
 
   const taskOfSubmission = (sub: Submission) => tasks.find((t) => t.id === sub.task_id);
 
+  const handleDownloadExample = async (taskIdForExample: string) => {
+    const res = await fetch(`/api/tasks/${taskIdForExample}/example`);
+    const json = await res.json();
+    if (json.downloadUrl) window.open(json.downloadUrl, "_blank");
+  };
+
   return (
     <div className="space-y-8">
       <div>
@@ -244,6 +250,15 @@ function SubmitInner() {
           {selectedTask?.description && (
             <p className="mt-1 text-xs text-slate-400">{selectedTask.description}</p>
           )}
+          {selectedTask?.example_filename && (
+            <button
+              type="button"
+              onClick={() => handleDownloadExample(selectedTask.id)}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline"
+            >
+              📎 예시 양식 다운로드 ({selectedTask.example_filename})
+            </button>
+          )}
         </div>
 
         {selectedTask && (
@@ -302,7 +317,15 @@ function SubmitInner() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {mySubmissions.map((sub) => (
-              <li key={sub.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <li key={sub.id} className="space-y-2 py-3">
+                {sub.correction_requested && (
+                  <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+                    🔴 담당자가 수정을 요청했습니다
+                    {sub.correction_message && `: ${sub.correction_message}`}
+                    {" — "}재업로드해주세요.
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="font-medium text-slate-800">{sub.stored_filename}</p>
                   <p className="text-xs text-slate-400">
@@ -332,6 +355,7 @@ function SubmitInner() {
                   >
                     삭제
                   </button>
+                </div>
                 </div>
               </li>
             ))}

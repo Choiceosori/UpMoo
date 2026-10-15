@@ -41,6 +41,8 @@ export interface CollectionTask {
   unit: SubmissionUnit;
   allowed_file_types: FileCategory[];
   position: number;
+  example_storage_path: string | null;
+  example_filename: string | null;
   created_at: string;
 }
 
@@ -57,6 +59,8 @@ export interface Submission {
   size_bytes: number;
   pii_flagged: boolean;
   expense_flagged: boolean;
+  correction_requested: boolean;
+  correction_message: string | null;
   created_at: string;
   updated_at: string;
 }

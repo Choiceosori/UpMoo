@@ -12,6 +12,8 @@ Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 �
 - **Postgres** — `pg`로 직접 접속하는 메타데이터 저장소 (권장: Neon, Vercel Postgres도 호환)
 - **S3 호환 Object Storage** — `@aws-sdk/client-s3`로 접근하는 제출 파일 저장소 (권장: Cloudflare R2)
 - **exceljs** — 서버(API Route)에서의 엑셀 병합
+- **pdf-lib** — 제출된 PDF를 페이지 단위로 이어 붙여 하나의 PDF로 병합
+- **jszip** — 파일 종류 무관하게 제출 자료 전체를 ZIP으로 묶어 다운로드
 - **xlsx (SheetJS)** — 브라우저에서의 엑셀 파싱/유효성 검사
 - **@hello-pangea/dnd** — 수합 업무 순서 Drag & Drop
 
@@ -32,8 +34,11 @@ src/
       schools/route.ts, schools/[id]/route.ts
       classes/route.ts
       tasks/route.ts, tasks/[taskId]/route.ts, tasks/reorder/route.ts
+      tasks/[taskId]/example/route.ts     # 업무별 예시 양식 파일 업로드/다운로드/삭제
       submissions/route.ts, submissions/[id]/route.ts
-      merge/route.ts                      # 엑셀(일반/지출) 병합 후 파일 다운로드 응답
+      submissions/[id]/correction/route.ts # 담당자의 수정 요청 등록/해제
+      merge/route.ts                      # 엑셀(일반/지출)·PDF 병합 후 파일 다운로드 응답
+      zip/route.ts                        # 업무의 전체 제출 파일을 ZIP으로 묶어 다운로드
       admin/diagnostics/route.ts          # DB/Object Storage 연결 상태 진단
   components/
     Navbar.tsx, SchoolGate.tsx, FileDropzone.tsx, WarningModal.tsx
@@ -42,6 +47,7 @@ src/
     types.ts, filename.ts, clientFileScan.ts
     db.ts                                 # Postgres 커넥션 풀 + 쿼리 헬퍼
     objectStorage.ts                      # Object Storage 업로드/다운로드/서명 URL (S3 호환)
+    mergePdf.ts                           # PDF 여러 개를 페이지 순서대로 병합
     validators/pii.ts                     # 이름/주민등록번호 패턴 검출
     validators/expenseExcel.ts            # 지출 엑셀 [내용,규격,단위,수량,예상단가] 검증
     excel/mergeGeneral.ts                 # 시트별 분리/추가 병합
@@ -127,12 +133,23 @@ npm run dev
    - 위 검사에서 문제가 발견되면 지정된 문구의 경고 팝업이 표시됩니다(제출을 막지는 않고 확인만 요구).
 4. 제출 시 서버가 `[학년(_반)_업무명_원본파일명]` 규칙으로 표시용 파일명을 생성해 DB에 저장합니다.
    실제 Object Storage 저장 경로는 한글/공백을 피해 UUID 기반으로 별도 생성됩니다.
-5. "내 제출 자료" 목록에서 재업로드/삭제가 가능합니다.
+5. 업무에 담당자가 올린 **예시 양식 파일**이 있으면 업무명 아래에 다운로드 링크로 표시됩니다.
+6. "내 제출 자료" 목록에서 재업로드/삭제가 가능합니다. 담당자가 수정을 요청한 건은 목록 상단에
+   빨간 배너로 요청 메시지가 표시되며, 재업로드하면 요청 표시가 자동으로 해제됩니다.
 
 ### 담당자 업무 상세 (`app/manager/tasks/[taskId]/page.tsx`)
-- "엑셀(일반) 통합 다운로드": `app/api/merge/route.ts`가 exceljs로 각 제출 파일의 시트를 그대로
+- **예시 양식**: 제출자가 참고할 양식 파일을 업로드/교체/삭제할 수 있습니다.
+- **엑셀(일반) 통합 다운로드**: `app/api/merge/route.ts`가 exceljs로 각 제출 파일의 시트를 그대로
   유지한 채 하나의 워크북에 순서대로 추가합니다(시트명 앞에 제출자 라벨 부여).
-- "엑셀(지출) 통합 다운로드": 동일 양식의 데이터 행을 새 워크북의 기존 데이터 하단에 이어붙입니다(Append).
+- **엑셀(지출) 통합 다운로드**: 동일 양식의 데이터 행을 새 워크북의 기존 데이터 하단에 이어붙입니다(Append).
+- **PDF 통합 다운로드**: pdf-lib로 제출 순서(학년/반 순)대로 페이지를 이어 붙여 하나의 PDF를
+  생성합니다.
+- **전체 파일 ZIP 다운로드**: 파일 종류(HWP 포함) 상관없이 해당 업무의 모든 제출 파일을 ZIP
+  하나로 묶어 받습니다. HWP는 한컴의 독점 포맷이라 공개 라이브러리로 내용을 합칠 수 없어
+  PDF/엑셀처럼 단일 파일로 병합하는 기능은 제공하지 않습니다 — ZIP으로 모아 받은 뒤 개별적으로
+  확인해야 합니다.
+- **수정 요청**: 제출 현황 표에서 각 건에 메시지를 남겨 재제출을 요청할 수 있습니다. 제출자
+  화면에 즉시 표시되며, 제출자가 재업로드하면 요청이 자동으로 해제됩니다.
 
 ## 문제 해결 (Troubleshooting)
 
@@ -141,6 +158,11 @@ npm run dev
   버튼으로 실제 연결 여부와 실패 사유를 바로 확인할 수 있습니다.
 - **`relation "schools" does not exist`류 오류**: `db/schema.sql`이 아직 실행되지 않았습니다.
   DB에 접속해 전체 내용을 실행하세요.
+- **예시 양식/수정 요청 기능이 에러를 낸다면**: 이미 예전 버전의 `db/schema.sql`을 실행해둔
+  DB라면 `example_storage_path`, `example_filename`, `correction_requested`,
+  `correction_message` 컬럼이 없을 수 있습니다. `db/schema.sql` 파일을 다시 열어 하단의
+  `alter table ... add column if not exists ...` 구문만 복사해 실행하면 됩니다(재실행해도
+  안전합니다).
 - **Object Storage 관련 오류**: `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`/`S3_ENDPOINT`/
   `S3_BUCKET` 값이 정확한지, 버킷이 실제로 존재하는지 확인하세요. `/admin` → "DB/스토리지
   연결 확인"으로 확인 가능합니다.
@@ -164,6 +186,10 @@ npm run dev
 
 ## 알려진 한계 (스캐폴드 범위)
 
+- **HWP/HWPX는 하나의 파일로 병합할 수 없습니다.** 한글과컴퓨터의 독점 포맷이라 공개된 JS/Node
+  라이브러리로 문서 내용을 열어 이어 붙이는 작업 자체가 불가능합니다(한컴 자체 SDK가 필요하며
+  무료/공개가 아닙니다). 대신 ZIP으로 모아 받는 기능을 제공합니다. 단일 파일 병합이 꼭 필요하다면
+  제출자에게 PDF로 변환해 제출하도록 안내하세요.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.

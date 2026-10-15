@@ -6,6 +6,20 @@ import { SchoolGate } from "@/components/SchoolGate";
 import { useSchool } from "@/context/SchoolContext";
 import { CollectionTask, FILE_CATEGORY_LABELS, Submission } from "@/lib/types";
 
+function downloadBlobResponse(blob: Blob, disposition: string | null, fallbackName: string) {
+  const url = URL.createObjectURL(blob);
+  const match = disposition ? /filename\*=UTF-8''([^;]+)/.exec(disposition) : null;
+  const filename = match ? decodeURIComponent(match[1]) : fallbackName;
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function TaskDetailInner() {
   const params = useParams<{ taskId: string }>();
   const { schoolId } = useSchool();
@@ -14,6 +28,12 @@ function TaskDetailInner() {
   const [loading, setLoading] = useState(false);
   const [merging, setMerging] = useState<string | null>(null);
   const [mergeError, setMergeError] = useState<string | null>(null);
+
+  const [exampleUploading, setExampleUploading] = useState(false);
+  const [exampleError, setExampleError] = useState<string | null>(null);
+
+  const [zipping, setZipping] = useState(false);
+  const [zipError, setZipError] = useState<string | null>(null);
 
   useEffect(() => {
     if (schoolId && params.taskId) fetchData();
@@ -36,7 +56,7 @@ function TaskDetailInner() {
     }
   };
 
-  const handleMerge = async (category: "excel_general" | "excel_expense") => {
+  const handleMerge = async (category: "excel_general" | "excel_expense" | "pdf") => {
     setMerging(category);
     setMergeError(null);
     try {
@@ -50,23 +70,87 @@ function TaskDetailInner() {
         throw new Error(json.error ?? "병합에 실패했습니다.");
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = /filename\*=UTF-8''([^;]+)/.exec(disposition);
-      const filename = match ? decodeURIComponent(match[1]) : `${task?.name}_통합.xlsx`;
-
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const fallbackExt = category === "pdf" ? "pdf" : "xlsx";
+      downloadBlobResponse(
+        blob,
+        res.headers.get("Content-Disposition"),
+        `${task?.name}_통합.${fallbackExt}`
+      );
     } catch (err) {
       setMergeError(err instanceof Error ? err.message : "병합 중 오류가 발생했습니다.");
     } finally {
       setMerging(null);
     }
+  };
+
+  const handleDownloadZip = async () => {
+    setZipping(true);
+    setZipError(null);
+    try {
+      const res = await fetch("/api/zip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskId: params.taskId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error ?? "ZIP 생성에 실패했습니다.");
+      }
+      const blob = await res.blob();
+      downloadBlobResponse(blob, res.headers.get("Content-Disposition"), `${task?.name}_전체파일.zip`);
+    } catch (err) {
+      setZipError(err instanceof Error ? err.message : "ZIP 생성 중 오류가 발생했습니다.");
+    } finally {
+      setZipping(false);
+    }
+  };
+
+  const handleUploadExample = async (file: File) => {
+    setExampleUploading(true);
+    setExampleError(null);
+    try {
+      const formData = new FormData();
+      formData.set("file", file);
+      const res = await fetch(`/api/tasks/${params.taskId}/example`, {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "예시 양식 업로드에 실패했습니다.");
+      setTask(json.task);
+    } catch (err) {
+      setExampleError(err instanceof Error ? err.message : "예시 양식 업로드 중 오류가 발생했습니다.");
+    } finally {
+      setExampleUploading(false);
+    }
+  };
+
+  const handleRemoveExample = async () => {
+    if (!confirm("예시 양식 파일을 삭제할까요?")) return;
+    await fetch(`/api/tasks/${params.taskId}/example`, { method: "DELETE" });
+    setTask((prev) => (prev ? { ...prev, example_storage_path: null, example_filename: null } : prev));
+  };
+
+  const handleDownloadExample = async () => {
+    const res = await fetch(`/api/tasks/${params.taskId}/example`);
+    const json = await res.json();
+    if (json.downloadUrl) window.open(json.downloadUrl, "_blank");
+  };
+
+  const handleRequestCorrection = async (submissionId: string) => {
+    const message = window.prompt("제출자에게 보낼 수정 요청 내용을 입력하세요.");
+    if (!message || !message.trim()) return;
+    const res = await fetch(`/api/submissions/${submissionId}/correction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message.trim() }),
+    });
+    if (res.ok) fetchData();
+  };
+
+  const handleCancelCorrection = async (submissionId: string) => {
+    const res = await fetch(`/api/submissions/${submissionId}/correction`, { method: "DELETE" });
+    if (res.ok) fetchData();
   };
 
   if (loading || !task) {
@@ -75,8 +159,10 @@ function TaskDetailInner() {
 
   const hasGeneral = task.allowed_file_types.includes("excel_general");
   const hasExpense = task.allowed_file_types.includes("excel_expense");
+  const hasPdf = task.allowed_file_types.includes("pdf");
   const generalCount = submissions.filter((s) => s.file_category === "excel_general").length;
   const expenseCount = submissions.filter((s) => s.file_category === "excel_expense").length;
+  const pdfCount = submissions.filter((s) => s.file_category === "pdf").length;
 
   return (
     <div className="space-y-6">
@@ -90,11 +176,58 @@ function TaskDetailInner() {
         </p>
       </div>
 
-      {(hasGeneral || hasExpense) && (
+      <div className="card space-y-3">
+        <h2 className="font-semibold text-slate-800">예시 양식</h2>
+        <p className="text-sm text-slate-500">
+          제출자가 참고할 예시 양식 파일을 올려두면, 자료 제출 화면에 다운로드 링크로 표시됩니다.
+        </p>
+        {task.example_filename ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+            <span className="font-medium text-slate-700">📎 {task.example_filename}</span>
+            <button onClick={handleDownloadExample} className="text-brand-600 hover:underline">
+              다운로드
+            </button>
+            <label className="btn-secondary cursor-pointer text-xs">
+              {exampleUploading ? "업로드 중..." : "교체"}
+              <input
+                type="file"
+                className="hidden"
+                disabled={exampleUploading}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUploadExample(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <button onClick={handleRemoveExample} className="text-xs text-red-500 hover:underline">
+              삭제
+            </button>
+          </div>
+        ) : (
+          <label className="btn-primary inline-block cursor-pointer">
+            {exampleUploading ? "업로드 중..." : "예시 양식 업로드"}
+            <input
+              type="file"
+              className="hidden"
+              disabled={exampleUploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUploadExample(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        )}
+        {exampleError && <p className="text-sm text-red-500">{exampleError}</p>}
+      </div>
+
+      {(hasGeneral || hasExpense || hasPdf || submissions.length > 0) && (
         <div className="card space-y-3">
-          <h2 className="font-semibold text-slate-800">통합 파일 수합</h2>
+          <h2 className="font-semibold text-slate-800">제출 파일 모아받기</h2>
           <p className="text-sm text-slate-500">
-            클릭하면 제출된 파일을 하나로 병합한 엑셀 파일이 즉시 다운로드됩니다.
+            엑셀은 하나의 워크북으로, PDF는 페이지를 이어 붙여 하나의 파일로 병합합니다. HWP를
+            포함한 모든 파일은 ZIP으로 한 번에 받을 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-3">
             {hasGeneral && (
@@ -119,8 +252,23 @@ function TaskDetailInner() {
                   : `엑셀(지출) 통합 다운로드 (${expenseCount}건)`}
               </button>
             )}
+            {hasPdf && (
+              <button
+                onClick={() => handleMerge("pdf")}
+                disabled={merging !== null || pdfCount === 0}
+                className="btn-secondary"
+              >
+                {merging === "pdf" ? "병합 중..." : `PDF 통합 다운로드 (${pdfCount}건)`}
+              </button>
+            )}
+            {submissions.length > 0 && (
+              <button onClick={handleDownloadZip} disabled={zipping} className="btn-secondary">
+                {zipping ? "압축 중..." : `전체 파일 ZIP 다운로드 (${submissions.length}건)`}
+              </button>
+            )}
           </div>
           {mergeError && <p className="text-sm text-red-500">{mergeError}</p>}
+          {zipError && <p className="text-sm text-red-500">{zipError}</p>}
         </div>
       )}
 
@@ -138,6 +286,7 @@ function TaskDetailInner() {
                 <th className="py-2">개인정보 확인</th>
                 <th className="py-2">양식 확인</th>
                 <th className="py-2">제출일</th>
+                <th className="py-2">수정 요청</th>
               </tr>
             </thead>
             <tbody>
@@ -164,6 +313,31 @@ function TaskDetailInner() {
                   </td>
                   <td className="py-2 text-slate-400">
                     {new Date(s.created_at).toLocaleString("ko-KR")}
+                  </td>
+                  <td className="py-2">
+                    {s.correction_requested ? (
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-red-500"
+                          title={s.correction_message ?? undefined}
+                        >
+                          🔴 요청됨
+                        </span>
+                        <button
+                          onClick={() => handleCancelCorrection(s.id)}
+                          className="text-xs text-slate-400 hover:underline"
+                        >
+                          해제
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleRequestCorrection(s.id)}
+                        className="text-xs font-medium text-brand-600 hover:underline"
+                      >
+                        수정 요청
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -38,6 +38,8 @@ create table if not exists collection_tasks (
   unit text not null check (unit in ('grade', 'class')),
   allowed_file_types text[] not null default '{}',
   position integer not null default 0,
+  example_storage_path text, -- 담당자가 업로드한 예시 양식 파일의 Object Storage 경로
+  example_filename text,     -- 위 예시 양식 파일의 원래(표시용) 파일명
   created_at timestamptz not null default now()
 );
 
@@ -57,12 +59,21 @@ create table if not exists submissions (
   size_bytes bigint not null default 0,
   pii_flagged boolean not null default false,
   expense_flagged boolean not null default false,
+  correction_requested boolean not null default false, -- 담당자가 수정을 요청했는지 여부
+  correction_message text,                              -- 담당자가 남긴 수정 요청 메시지
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index if not exists idx_submissions_task on submissions(task_id);
 create index if not exists idx_submissions_school on submissions(school_id);
+
+-- 이미 이 스키마를 실행해 테이블이 있는 DB에 새 컬럼만 추가하려면 아래 ALTER 문만
+-- 실행해도 됩니다(재실행해도 안전한 idempotent 구문입니다).
+alter table collection_tasks add column if not exists example_storage_path text;
+alter table collection_tasks add column if not exists example_filename text;
+alter table submissions add column if not exists correction_requested boolean not null default false;
+alter table submissions add column if not exists correction_message text;
 
 -- Object Storage 버킷(예: Cloudflare R2)은 해당 서비스 콘솔에서 별도로 생성하세요
 -- (예: "upmoo-submissions"). 버킷 이름은 S3_BUCKET 환경변수로 지정합니다.
