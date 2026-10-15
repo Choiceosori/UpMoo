@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne } from "@/lib/db";
-import { downloadObject } from "@/lib/objectStorage";
+import { downloadObject, getSignedDownloadUrl } from "@/lib/objectStorage";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
 import { mergePdfFiles } from "@/lib/mergePdf";
@@ -74,23 +74,33 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     return NextResponse.json({ error: "병합할 제출 자료가 없습니다." }, { status: 404 });
   }
 
-  const inputs = await Promise.all(
-    submissions.map(async (sub) => {
-      const buffer = await downloadObject(sub.storage_path);
-      return { label: labelFor(sub), buffer };
-    })
-  );
-
   let mergedBuffer: Buffer;
   try {
-    if (category === "excel_general") {
-      mergedBuffer = await mergeGeneralExcel(inputs);
-    } else if (category === "excel_expense") {
-      mergedBuffer = await mergeExpenseExcel(inputs);
-    } else if (category === "pdf") {
-      mergedBuffer = await mergePdfFiles(inputs);
+    if (category === "hwp") {
+      // HWP는 파일 내용을 직접 내려받지 않고, Python 병합 함수가 R2에서
+      // 직접 받아갈 수 있도록 서명 URL만 넘깁니다 (lib/mergeHwp.ts 주석 참고
+      // — Vercel 함수의 ~4.5MB 바디 한도를 피하기 위함).
+      const hwpInputs = await Promise.all(
+        submissions.map(async (sub) => ({
+          label: labelFor(sub),
+          url: await getSignedDownloadUrl(sub.storage_path, 300),
+        }))
+      );
+      mergedBuffer = await mergeHwpFiles(hwpInputs, req.nextUrl.origin);
     } else {
-      mergedBuffer = await mergeHwpFiles(inputs, req.nextUrl.origin);
+      const inputs = await Promise.all(
+        submissions.map(async (sub) => {
+          const buffer = await downloadObject(sub.storage_path);
+          return { label: labelFor(sub), buffer };
+        })
+      );
+      if (category === "excel_general") {
+        mergedBuffer = await mergeGeneralExcel(inputs);
+      } else if (category === "excel_expense") {
+        mergedBuffer = await mergeExpenseExcel(inputs);
+      } else {
+        mergedBuffer = await mergePdfFiles(inputs);
+      }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "병합 중 오류가 발생했습니다.";

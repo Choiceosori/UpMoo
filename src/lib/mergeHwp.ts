@@ -11,33 +11,39 @@
  * 검증하지는 못한 best-effort 구현입니다. 운영에 사용하기 전 반드시 실제
  * 한글에서 열어 확인하세요 — 문제가 있으면 /api/zip(전체 파일 ZIP)으로
  * 대체하세요.
+ *
+ * 파일 내용은 base64로 직접 주고받지 않습니다. Vercel Serverless Function은
+ * 요청/응답 바디가 약 4.5MB로 제한되어 있어(FUNCTION_PAYLOAD_TOO_LARGE /
+ * HTTP 413), 제출 파일이 여러 개이거나 하나라도 크면 금방 한도를 넘습니다.
+ * 대신 각 원본 파일의 R2 서명(presigned) GET URL만 넘겨 Python 함수가 직접
+ * R2에서 내려받게 하고, 병합 결과도 Python이 R2에 업로드한 뒤 서명 URL만
+ * 돌려받아 Node가 그 URL로 내려받습니다 — 양쪽 다 Vercel 함수 바디 한도를
+ * 거치지 않습니다.
  */
 export interface HwpMergeInput {
   label: string;
-  buffer: Buffer;
+  url: string;
 }
 
 export async function mergeHwpFiles(inputs: HwpMergeInput[], origin: string): Promise<Buffer> {
-  const url = `${origin}/api/hwp_merge`;
+  const endpoint = `${origin}/api/hwp_merge`;
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        files: inputs.map((input) => input.buffer.toString("base64")),
-      }),
+      body: JSON.stringify({ urls: inputs.map((input) => input.url) }),
     });
   } catch (err) {
     throw new Error(
-      `HWP 병합 함수(${url})에 연결하지 못했습니다: ${
+      `HWP 병합 함수(${endpoint})에 연결하지 못했습니다: ${
         err instanceof Error ? err.message : String(err)
       }`
     );
   }
 
   const rawText = await res.text();
-  let json: { data?: string; error?: string } = {};
+  let json: { url?: string; error?: string } = {};
   try {
     json = rawText ? JSON.parse(rawText) : {};
   } catch {
@@ -53,9 +59,13 @@ export async function mergeHwpFiles(inputs: HwpMergeInput[], origin: string): Pr
   if (!res.ok) {
     throw new Error(json.error ?? `HWP 병합 함수 호출에 실패했습니다 (HTTP ${res.status}).`);
   }
-  if (!json.data) {
+  if (!json.url) {
     throw new Error("HWP 병합 함수가 올바른 응답을 반환하지 않았습니다.");
   }
 
-  return Buffer.from(json.data, "base64");
+  const fileRes = await fetch(json.url);
+  if (!fileRes.ok) {
+    throw new Error(`병합된 HWP 파일을 내려받지 못했습니다 (HTTP ${fileRes.status}).`);
+  }
+  return Buffer.from(await fileRes.arrayBuffer());
 }

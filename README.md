@@ -214,9 +214,14 @@ npm run dev
   비롯된 제출물일 때 가장 안전합니다. 컨테이너 크기는 내부적으로 약 7MB(109 FAT 섹터)로
   제한되어 있으며, 초과 시 조용히 깨지는 대신 명확한 에러를 반환합니다.
 - **HWP 병합은 별도 런타임(Python)에 의존합니다.** `api/hwp_merge.py`는 Vercel Python
-  서버리스 함수로 배포되며(`requirements.txt`의 `olefile` 설치), Next.js의 `/api/merge`가
-  내부적으로 이 함수를 호출합니다. 두 함수 사이의 호출이라도 요청 본문 크기 제한(약 4.5MB,
-  base64 인코딩으로 약 33% 더 커짐)은 동일하게 적용됩니다.
+  서버리스 함수로 배포되며(`requirements.txt`의 `olefile`, `boto3` 설치), Next.js의
+  `/api/merge`가 내부적으로 이 함수를 호출합니다. 처음엔 원본 파일을 base64로 요청 본문에
+  직접 실어 보냈다가 Vercel 함수의 요청/응답 바디 한도(약 4.5MB)를 넘어
+  `FUNCTION_PAYLOAD_TOO_LARGE`(413)로 실패하는 문제가 있었습니다. 지금은 파일 내용을
+  직접 주고받지 않고, Node가 각 원본의 R2 서명(presigned) URL만 넘겨 Python이 R2에서
+  직접 내려받고, 병합 결과도 Python이 R2에 업로드한 뒤 서명 URL만 돌려받습니다
+  (`api/_hwplib/storage.py`). 두 함수 사이의 호출 바디에는 URL 목록처럼 작은 JSON만
+  오가므로 이 한도에 걸리지 않습니다.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.
