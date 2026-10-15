@@ -18,17 +18,40 @@ export interface HwpMergeInput {
 }
 
 export async function mergeHwpFiles(inputs: HwpMergeInput[], origin: string): Promise<Buffer> {
-  const res = await fetch(`${origin}/api/hwp_merge`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      files: inputs.map((input) => input.buffer.toString("base64")),
-    }),
-  });
+  const url = `${origin}/api/hwp_merge`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        files: inputs.map((input) => input.buffer.toString("base64")),
+      }),
+    });
+  } catch (err) {
+    throw new Error(
+      `HWP 병합 함수(${url})에 연결하지 못했습니다: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
 
-  const json = await res.json().catch(() => ({}));
+  const rawText = await res.text();
+  let json: { data?: string; error?: string } = {};
+  try {
+    json = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    // JSON이 아닌 응답(예: Vercel의 기본 404/500 HTML 페이지)인 경우
+    // 원인을 알 수 있도록 상태 코드와 응답 앞부분을 그대로 노출합니다.
+    throw new Error(
+      `HWP 병합 함수가 올바르지 않은 응답을 반환했습니다 (HTTP ${res.status}). ` +
+        `api/hwp_merge.py가 Vercel에 Python 함수로 배포됐는지 확인하세요. ` +
+        `응답 일부: ${rawText.slice(0, 200)}`
+    );
+  }
+
   if (!res.ok) {
-    throw new Error(json.error ?? "HWP 병합 함수 호출에 실패했습니다.");
+    throw new Error(json.error ?? `HWP 병합 함수 호출에 실패했습니다 (HTTP ${res.status}).`);
   }
   if (!json.data) {
     throw new Error("HWP 병합 함수가 올바른 응답을 반환하지 않았습니다.");

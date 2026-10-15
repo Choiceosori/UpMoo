@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { SchoolGate } from "@/components/SchoolGate";
+import { CorrectionRequestModal } from "@/components/CorrectionRequestModal";
 import { useSchool } from "@/context/SchoolContext";
 import { CollectionTask, FILE_CATEGORY_LABELS, Submission } from "@/lib/types";
 
@@ -34,6 +35,9 @@ function TaskDetailInner() {
 
   const [zipping, setZipping] = useState(false);
   const [zipError, setZipError] = useState<string | null>(null);
+
+  const [correctionTarget, setCorrectionTarget] = useState<string | null>(null);
+  const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
 
   useEffect(() => {
     if (schoolId && params.taskId) fetchData();
@@ -137,15 +141,23 @@ function TaskDetailInner() {
     if (json.downloadUrl) window.open(json.downloadUrl, "_blank");
   };
 
-  const handleRequestCorrection = async (submissionId: string) => {
-    const message = window.prompt("제출자에게 보낼 수정 요청 내용을 입력하세요.");
-    if (!message || !message.trim()) return;
-    const res = await fetch(`/api/submissions/${submissionId}/correction`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: message.trim() }),
-    });
-    if (res.ok) fetchData();
+  const handleSubmitCorrection = async (category: string, detail: string) => {
+    if (!correctionTarget) return;
+    setCorrectionSubmitting(true);
+    try {
+      const message = detail ? `[${category}] ${detail}` : `[${category}]`;
+      const res = await fetch(`/api/submissions/${correctionTarget}/correction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      if (res.ok) {
+        setCorrectionTarget(null);
+        fetchData();
+      }
+    } finally {
+      setCorrectionSubmitting(false);
+    }
   };
 
   const handleCancelCorrection = async (submissionId: string) => {
@@ -345,7 +357,7 @@ function TaskDetailInner() {
                       </div>
                     ) : (
                       <button
-                        onClick={() => handleRequestCorrection(s.id)}
+                        onClick={() => setCorrectionTarget(s.id)}
                         className="text-xs font-medium text-brand-600 hover:underline"
                       >
                         수정 요청
@@ -358,6 +370,13 @@ function TaskDetailInner() {
           </table>
         )}
       </div>
+
+      <CorrectionRequestModal
+        open={correctionTarget !== null}
+        submitting={correctionSubmitting}
+        onCancel={() => setCorrectionTarget(null)}
+        onSubmit={handleSubmitCorrection}
+      />
     </div>
   );
 }
