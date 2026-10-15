@@ -1,6 +1,12 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { query, queryOne } from "@/lib/db";
-import { downloadObject, getSignedDownloadUrl } from "@/lib/objectStorage";
+import {
+  downloadObject,
+  getSignedDownloadUrl,
+  getSignedUploadUrl,
+  removeObjects,
+} from "@/lib/objectStorage";
 import { mergeGeneralExcel } from "@/lib/excel/mergeGeneral";
 import { mergeExpenseExcel } from "@/lib/excel/mergeExpense";
 import { mergePdfFiles } from "@/lib/mergePdf";
@@ -79,14 +85,23 @@ export const POST = withApiErrorHandling(async (req: NextRequest) => {
     if (category === "hwp") {
       // HWP는 파일 내용을 직접 내려받지 않고, Python 병합 함수가 R2에서
       // 직접 받아갈 수 있도록 서명 URL만 넘깁니다 (lib/mergeHwp.ts 주석 참고
-      // — Vercel 함수의 ~4.5MB 바디 한도를 피하기 위함).
+      // — Vercel 함수의 ~4.5MB 바디 한도를 피하기 위함). 병합 결과도 Python이
+      // 서명된 PUT URL로 R2에 직접 올리게 하여, Python 쪽에 AWS SDK 없이
+      // 표준 라이브러리(urllib)만으로 처리할 수 있게 합니다.
       const hwpInputs = await Promise.all(
         submissions.map(async (sub) => ({
           label: labelFor(sub),
           url: await getSignedDownloadUrl(sub.storage_path, 300),
         }))
       );
-      mergedBuffer = await mergeHwpFiles(hwpInputs, req.nextUrl.origin);
+      const resultKey = `tmp/hwp-merge/${randomUUID()}.hwp`;
+      const resultUploadUrl = await getSignedUploadUrl(resultKey, 300);
+      try {
+        await mergeHwpFiles(hwpInputs, resultUploadUrl, req.nextUrl.origin);
+        mergedBuffer = await downloadObject(resultKey);
+      } finally {
+        await removeObjects([resultKey]).catch(() => {});
+      }
     } else {
       const inputs = await Promise.all(
         submissions.map(async (sub) => {

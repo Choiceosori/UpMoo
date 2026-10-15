@@ -16,23 +16,32 @@
  * 요청/응답 바디가 약 4.5MB로 제한되어 있어(FUNCTION_PAYLOAD_TOO_LARGE /
  * HTTP 413), 제출 파일이 여러 개이거나 하나라도 크면 금방 한도를 넘습니다.
  * 대신 각 원본 파일의 R2 서명(presigned) GET URL만 넘겨 Python 함수가 직접
- * R2에서 내려받게 하고, 병합 결과도 Python이 R2에 업로드한 뒤 서명 URL만
- * 돌려받아 Node가 그 URL로 내려받습니다 — 양쪽 다 Vercel 함수 바디 한도를
- * 거치지 않습니다.
+ * R2에서 내려받게 하고, 병합 결과도 Python이 (route.ts가 미리 발급한) 서명된
+ * PUT URL로 R2에 직접 업로드합니다 — Python 쪽에 AWS SDK(boto3) 설치 없이
+ * 표준 라이브러리(urllib)만으로 처리되며, 양쪽 모두 Vercel 함수 바디 한도를
+ * 거치지 않습니다. 업로드가 끝나면 route.ts가 그 결과 객체를 직접 내려받아
+ * 응답을 만들고, 임시 객체는 정리합니다.
  */
 export interface HwpMergeInput {
   label: string;
   url: string;
 }
 
-export async function mergeHwpFiles(inputs: HwpMergeInput[], origin: string): Promise<Buffer> {
+export async function mergeHwpFiles(
+  inputs: HwpMergeInput[],
+  resultUploadUrl: string,
+  origin: string
+): Promise<void> {
   const endpoint = `${origin}/api/hwp_merge`;
   let res: Response;
   try {
     res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ urls: inputs.map((input) => input.url) }),
+      body: JSON.stringify({
+        urls: inputs.map((input) => input.url),
+        uploadUrl: resultUploadUrl,
+      }),
     });
   } catch (err) {
     throw new Error(
@@ -43,29 +52,21 @@ export async function mergeHwpFiles(inputs: HwpMergeInput[], origin: string): Pr
   }
 
   const rawText = await res.text();
-  let json: { url?: string; error?: string } = {};
+  let json: { ok?: boolean; error?: string } = {};
   try {
     json = rawText ? JSON.parse(rawText) : {};
   } catch {
-    // JSON이 아닌 응답(예: Vercel의 기본 404/500 HTML 페이지)인 경우
-    // 원인을 알 수 있도록 상태 코드와 응답 앞부분을 그대로 노출합니다.
+    // JSON이 아닌 응답(예: Python 함수가 아예 크래시해 Vercel의 기본
+    // 404/500 HTML 페이지가 내려온 경우)인 경우 원인을 알 수 있도록 상태
+    // 코드와 응답 앞부분을 그대로 노출합니다.
     throw new Error(
       `HWP 병합 함수가 올바르지 않은 응답을 반환했습니다 (HTTP ${res.status}). ` +
-        `api/hwp_merge.py가 Vercel에 Python 함수로 배포됐는지 확인하세요. ` +
-        `응답 일부: ${rawText.slice(0, 200)}`
+        `api/hwp_merge.py가 Vercel에 Python 함수로 배포됐는지, 함수 로그에 ` +
+        `크래시가 있는지 확인하세요. 응답 일부: ${rawText.slice(0, 200)}`
     );
   }
 
-  if (!res.ok) {
+  if (!res.ok || !json.ok) {
     throw new Error(json.error ?? `HWP 병합 함수 호출에 실패했습니다 (HTTP ${res.status}).`);
   }
-  if (!json.url) {
-    throw new Error("HWP 병합 함수가 올바른 응답을 반환하지 않았습니다.");
-  }
-
-  const fileRes = await fetch(json.url);
-  if (!fileRes.ok) {
-    throw new Error(`병합된 HWP 파일을 내려받지 못했습니다 (HTTP ${fileRes.status}).`);
-  }
-  return Buffer.from(await fileRes.arrayBuffer());
 }

@@ -97,3 +97,17 @@ export async function getSignedDownloadUrl(
   });
   return getSignedUrl(getClient(), command, { expiresIn: expiresInSeconds });
 }
+
+/**
+ * PUT 전용 서명 URL을 발급합니다. 외부 런타임(예: api/hwp_merge.py의 Python
+ * 함수)이 AWS SDK 없이 평범한 HTTP PUT만으로 결과물을 올릴 수 있게 해줍니다.
+ * ContentType을 서명에 포함하지 않으므로, 업로드 쪽에서 Content-Type 헤더를
+ * 정확히 맞출 필요 없이 바디만 PUT하면 됩니다.
+ */
+export async function getSignedUploadUrl(
+  key: string,
+  expiresInSeconds: number
+): Promise<string> {
+  const command = new PutObjectCommand({ Bucket: getBucket(), Key: key });
+  return getSignedUrl(getClient(), command, { expiresIn: expiresInSeconds });
+}
