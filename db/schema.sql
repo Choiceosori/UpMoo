@@ -68,12 +68,44 @@ create table if not exists submissions (
 create index if not exists idx_submissions_task on submissions(task_id);
 create index if not exists idx_submissions_school on submissions(school_id);
 
--- 이미 이 스키마를 실행해 테이블이 있는 DB에 새 컬럼만 추가하려면 아래 ALTER 문만
--- 실행해도 됩니다(재실행해도 안전한 idempotent 구문입니다).
+-- 5. HWP 병합 작업 큐
+-- Vercel(Linux)은 한글 프로그램을 실행할 수 없어서, 사용자의 Windows+한글 PC에서
+-- 돌아가는 워커(windows-hwp-service/server.py)가 이 테이블을 계속 폴링하며 작업을
+-- 가져가 처리합니다. 학교 네트워크가 외부에서 PC로 들어오는 연결(Cloudflare
+-- Tunnel, ngrok 등)을 막는 경우가 흔해서, 반대로 PC가 Vercel에 "일거리 있나요?"
+-- 라고 계속 물어보는 폴링 방식을 씁니다 — PC 쪽은 일반적인 웹 브라우징과 똑같은
+-- 나가는 HTTPS 요청만 하면 되므로 방화벽에 걸릴 일이 없습니다.
+create table if not exists hwp_merge_jobs (
+  id uuid primary key default gen_random_uuid(),
+  status text not null default 'pending' check (status in ('pending', 'processing', 'done', 'error')),
+  urls jsonb not null,       -- 병합할 원본 파일들의 서명 GET URL 배열
+  upload_url text not null,  -- 병합 결과를 올릴 서명 PUT URL
+  error text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  completed_at timestamptz
+);
+
+create index if not exists idx_hwp_merge_jobs_status on hwp_merge_jobs(status, created_at);
+
+-- 이미 이 스키마를 실행해 테이블이 있는 DB에 새 컬럼/테이블만 추가하려면 아래
+-- 구문만 실행해도 됩니다(재실행해도 안전한 idempotent 구문입니다).
 alter table collection_tasks add column if not exists example_storage_path text;
 alter table collection_tasks add column if not exists example_filename text;
 alter table submissions add column if not exists correction_requested boolean not null default false;
 alter table submissions add column if not exists correction_message text;
+
+create table if not exists hwp_merge_jobs (
+  id uuid primary key default gen_random_uuid(),
+  status text not null default 'pending' check (status in ('pending', 'processing', 'done', 'error')),
+  urls jsonb not null,
+  upload_url text not null,
+  error text,
+  created_at timestamptz not null default now(),
+  claimed_at timestamptz,
+  completed_at timestamptz
+);
+create index if not exists idx_hwp_merge_jobs_status on hwp_merge_jobs(status, created_at);
 
 -- Object Storage 버킷(예: Cloudflare R2)은 해당 서비스 콘솔에서 별도로 생성하세요
 -- (예: "upmoo-submissions"). 버킷 이름은 S3_BUCKET 환경변수로 지정합니다.

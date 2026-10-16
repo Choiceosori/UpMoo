@@ -16,13 +16,15 @@ Next.js(App Router) + TypeScript + Tailwind CSS 기반의 학교 업무 자료 �
 - **jszip** — 파일 종류 무관하게 제출 자료 전체를 ZIP으로 묶어 다운로드
 - **xlsx (SheetJS)** — 브라우저에서의 엑셀 파싱/유효성 검사
 - **@hello-pangea/dnd** — 수합 업무 순서 Drag & Drop
-- **Windows HWP 병합 서비스 (권장)** — `windows-hwp-service/`. 사용자가 보유한 Windows +
-  한글 설치 PC에서 실행하는 작은 서비스로, `comtypes`로 실제 한글 프로그램을 COM
+- **Windows HWP 병합 워커 (권장)** — `windows-hwp-service/`. 사용자가 보유한 Windows +
+  한글 설치 PC에서 실행하는 작은 폴링 워커로, `comtypes`로 실제 한글 프로그램을 COM
   자동화해 파일을 이어 붙입니다. 결과물이 실제 한글이 저장한 파일과 동일해 항상
-  정상적으로 열립니다. `HWP_MERGE_SERVICE_URL` 환경변수로 연결합니다 (자세한 설정은
-  `windows-hwp-service/README.md` 참고).
-- **Python + olefile (Vercel Python 함수, 폴백/비권장)** — `HWP_MERGE_SERVICE_URL`이
-  설정되지 않았을 때만 쓰이는 대체 경로. HWP5 OLE2 Compound File 포맷을 처음부터 직접
+  정상적으로 열립니다. Vercel이 이 PC를 직접 호출하는 게 아니라, 이 PC가 Vercel에
+  몇 초 간격으로 작업이 있는지 물어보는 방식(폴링)이라 포트 개방이나 터널링 도구
+  없이도 어떤 네트워크에서나(학교 방화벽 포함) 동작합니다. `HWP_MERGE_WORKER_SECRET`
+  환경변수로 연결합니다 (자세한 설정은 `windows-hwp-service/README.md` 참고).
+- **Python + olefile (Vercel Python 함수, 폴백/비권장)** — `HWP_MERGE_USE_EXPERIMENTAL_PYTHON=true`로
+  명시적으로 켰을 때만 쓰이는 대체 경로. HWP5 OLE2 Compound File 포맷을 처음부터 직접
   구현해 병합을 흉내 내는 실험적 기능으로, Next.js와 같은 Vercel 프로젝트에
   `api/hwp_merge.py`로 함께 배포됩니다(아래 "알려진 한계" 참고 — 실제 한글 프로그램의
   비공개 내부 검증을 통과하지 못할 수 있음이 실제 테스트로 확인됨)
@@ -47,8 +49,10 @@ src/
       tasks/[taskId]/example/route.ts     # 업무별 예시 양식 파일 업로드/다운로드/삭제
       submissions/route.ts, submissions/[id]/route.ts
       submissions/[id]/correction/route.ts # 담당자의 수정 요청 등록/해제
-      merge/route.ts                      # 엑셀(일반/지출)·PDF 병합 후 파일 다운로드 응답
+      merge/route.ts                      # 엑셀(일반/지출)·PDF·HWP 병합 후 파일 다운로드 응답
       zip/route.ts                        # 업무의 전체 제출 파일을 ZIP으로 묶어 다운로드
+      hwp-merge-jobs/next/route.ts        # Windows 워커가 폴링: 대기 중인 HWP 병합 작업 가져가기
+      hwp-merge-jobs/[id]/complete/route.ts # Windows 워커가 작업 완료/실패를 보고
       admin/diagnostics/route.ts          # DB/Object Storage 연결 상태 진단
   components/
     Navbar.tsx, SchoolGate.tsx, FileDropzone.tsx, WarningModal.tsx
@@ -62,7 +66,7 @@ src/
     validators/expenseExcel.ts            # 지출 엑셀 [내용,규격,단위,수량,예상단가] 검증
     excel/mergeGeneral.ts                 # 시트별 분리/추가 병합
     excel/mergeExpense.ts                 # 기존 데이터 하단에 Append 병합
-    mergeHwp.ts                           # HWP 병합 백엔드(Windows 서비스 또는 Python 함수) 호출 브리지
+    mergeHwp.ts                           # HWP 병합 작업 등록/대기(Windows 워커) 또는 Python 폴백 호출
 api/
   hwp_merge.py                            # Vercel Python 함수(폴백): OLE2 Compound File 라이터 +
                                            # HWP5 BodyText 섹션 병합 + 진입점이 모두 한 파일에
@@ -70,7 +74,7 @@ api/
                                            # 서브패키지 없이 단일 파일로 구성)
 requirements.txt                          # api/hwp_merge.py용 Python 의존성(olefile)
 windows-hwp-service/                      # (권장) 실제 한글 프로그램으로 HWP를 병합하는 Windows
-                                           # 전용 서비스. server.py, requirements.txt, 설정 가이드
+                                           # 전용 폴링 워커. worker.py, requirements.txt, 설정 가이드
 db/schema.sql                             # Postgres 테이블 생성 스크립트
 ```
 
@@ -166,14 +170,18 @@ npm run dev
 - **엑셀(지출) 통합 다운로드**: 동일 양식의 데이터 행을 새 워크북의 기존 데이터 하단에 이어붙입니다(Append).
 - **PDF 통합 다운로드**: pdf-lib로 제출 순서(학년/반 순)대로 페이지를 이어 붙여 하나의 PDF를
   생성합니다.
-- **HWP 통합 다운로드**: `HWP_MERGE_SERVICE_URL`이 설정되어 있으면(권장) 사용자의
-  Windows+한글 PC에서 돌아가는 `windows-hwp-service/`가 실제 한글 프로그램으로 파일을
-  이어 붙여 저장합니다 — 한글이 직접 만든 파일이므로 항상 정상적으로 열립니다. 설정이
-  없으면 `api/hwp_merge.py`(Vercel Python 함수, **실험적/비권장**)로 자동 대체됩니다 —
+- **HWP 통합 다운로드**: `hwp_merge_jobs` 테이블에 작업을 등록하고, 사용자의
+  Windows+한글 PC에서 돌아가는 `windows-hwp-service/worker.py`가 몇 초 간격으로
+  폴링해 작업을 가져가 실제 한글 프로그램으로 파일을 이어 붙여 저장합니다 — 한글이
+  직접 만든 파일이므로 항상 정상적으로 열립니다. 워커가 외부 연결을 받을 필요가
+  없는 폴링 구조라 학교 방화벽 등에도 막히지 않습니다. 워커가 꺼져 있으면 최대
+  50초 정도 기다리다가 "평일 업무시간에 다시 시도해달라"는 안내로 실패합니다.
+  `HWP_MERGE_USE_EXPERIMENTAL_PYTHON=true`로 명시적으로 켜면 대신
+  `api/hwp_merge.py`(Vercel Python 함수, **실험적/비권장**)를 즉시 사용합니다 —
   이건 HWP5(OLE2 Compound File) 포맷을 처음부터 직접 구현해 흉내 내는 기능으로, 구조적
   정합성은 `olefile`로 검증했지만 **실제 한글 프로그램의 비공개 내부 검증을 통과하지
   못해 파일을 아예 인식하지 못하는 사례가 실제 테스트에서 확인됐습니다.** 반드시
-  Windows 서비스를 설정해 쓰는 걸 권장합니다.
+  Windows 워커를 설정해 쓰는 걸 권장합니다.
 - **전체 파일 ZIP 다운로드**: 파일 종류 상관없이 해당 업무의 모든 제출 파일을 ZIP 하나로
   묶어 받습니다. HWP 통합이 믿을 수 없거나 실패할 때의 안전한 대안입니다.
 - **수정 요청**: 제출 현황 표에서 각 건에 메시지를 남겨 재제출을 요청할 수 있습니다. 제출자
@@ -186,10 +194,11 @@ npm run dev
   버튼으로 실제 연결 여부와 실패 사유를 바로 확인할 수 있습니다.
 - **`relation "schools" does not exist`류 오류**: `db/schema.sql`이 아직 실행되지 않았습니다.
   DB에 접속해 전체 내용을 실행하세요.
-- **예시 양식/수정 요청 기능이 에러를 낸다면**: 이미 예전 버전의 `db/schema.sql`을 실행해둔
-  DB라면 `example_storage_path`, `example_filename`, `correction_requested`,
-  `correction_message` 컬럼이 없을 수 있습니다. `db/schema.sql` 파일을 다시 열어 하단의
-  `alter table ... add column if not exists ...` 구문만 복사해 실행하면 됩니다(재실행해도
+- **예시 양식/수정 요청/HWP 통합 기능이 에러를 낸다면**: 이미 예전 버전의 `db/schema.sql`을
+  실행해둔 DB라면 `example_storage_path`, `example_filename`, `correction_requested`,
+  `correction_message` 컬럼이나 `hwp_merge_jobs` 테이블이 없을 수 있습니다. `db/schema.sql`
+  파일을 다시 열어 하단의 `alter table ... add column if not exists ...` /
+  `create table if not exists hwp_merge_jobs ...` 구문만 복사해 실행하면 됩니다(재실행해도
   안전합니다).
 - **Object Storage 관련 오류**: `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY`/`S3_ENDPOINT`/
   `S3_BUCKET` 값이 정확한지, 버킷이 실제로 존재하는지 확인하세요. `/admin` → "DB/스토리지
@@ -214,10 +223,11 @@ npm run dev
 
 ## 알려진 한계 (스캐폴드 범위)
 
-- **HWP 통합 병합은 Windows 서비스 설정을 강력히 권장합니다.** `HWP_MERGE_SERVICE_URL`이
-  설정되어 있으면 `windows-hwp-service/`가 실제 한글 프로그램(COM 자동화)으로 병합하므로
-  결과물이 항상 정상입니다. 설정하지 않으면 자동으로 쓰이는 `api/hwp_merge.py`는 HWP5
-  바이너리 포맷(OLE2 Compound File)을 다루는 공개 라이브러리가 없어 OLE2 컨테이너 자체를
+- **HWP 통합 병합은 Windows 워커 설정을 강력히 권장합니다.** 기본값(`windows-hwp-service/
+  worker.py`가 `hwp_merge_jobs`를 폴링하는 방식)은 실제 한글 프로그램(COM 자동화)으로
+  병합하므로 결과물이 항상 정상입니다. `HWP_MERGE_USE_EXPERIMENTAL_PYTHON=true`로
+  명시적으로 켰을 때만 쓰이는 `api/hwp_merge.py`는 HWP5 바이너리 포맷(OLE2 Compound
+  File)을 다루는 공개 라이브러리가 없어 OLE2 컨테이너 자체를
   처음부터 직접 구현한 **검증되지 않은 실험적 기능**입니다. `olefile`로 구조적 정합성
   (섹터/FAT/디렉터리 트리/레드-블랙 트리 불변식까지)을 충분히 테스트했는데도, 실제
   한글로 열어보면 한컴의 비공개 내부 검증을 통과하지 못해 OLE2 컨테이너 자체를 인식하지
@@ -246,6 +256,17 @@ npm run dev
   함께 묶어준다고 확신할 수 없어서, 그 불확실성 자체를 없애려고 "이 디렉터리의 .py 파일
   하나 = 함수 하나"라는 가장 단순하고 확실한 규칙만 쓰도록 전부 한 파일로 합쳤습니다. 혹시
   이 함수를 다시 여러 파일로 나누게 되면 이 문제가 재발할 수 있다는 점을 염두에 두세요.
+- **Windows HWP 워커는 Vercel이 호출하는 게 아니라 워커가 Vercel을 폴링합니다.**
+  처음엔 Vercel이 Windows PC를 직접 호출하는 구조(PC에서 HTTP 서버를 띄우고
+  Cloudflare Tunnel/ngrok으로 외부에 노출)로 만들었는데, 실제로 써보니 학교
+  네트워크가 두 터널링 도구를 전부 막았습니다(SSL 검사 프록시가 터널 핸드셰이크를
+  가로채 JSON 대신 HTML 에러 페이지를 돌려주는 식으로 나타남 — `cloudflared`의
+  "failed to unmarshal quick Tunnel" 에러가 그 증상입니다). 포트 개방이 막힌
+  네트워크에서도 동작하도록, Postgres에 `hwp_merge_jobs` 작업 큐 테이블을 두고
+  Windows 워커가 몇 초 간격으로 "할 일 있나요?"라고 물어보는 폴링 구조로
+  바꿨습니다 — 일반적인 웹 브라우징과 동일한 나가는 HTTPS 요청만 쓰므로 방화벽에
+  막히지 않습니다. 대신 폴링 주기(기본 2~3초)만큼의 지연이 생기고, 워커가 꺼져
+  있으면 `/api/merge`가 최대 50초 기다렸다가 실패합니다.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.
