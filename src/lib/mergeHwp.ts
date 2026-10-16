@@ -2,7 +2,9 @@
  * HWP(한글) 병합은 Node.js에서 직접 처리할 수 없습니다. HWP5는 한컴의 독점
  * 바이너리(OLE2 Compound File) 포맷이라 공개된 JS/Node 라이브러리가 없기
  * 때문에, 같은 Vercel 프로젝트에 함께 배포되는 Python 서버리스 함수
- * (api/hwp_merge.py, api/_hwplib/*)를 내부적으로 호출해 처리합니다.
+ * (api/hwp_merge.py — CFB 라이터/HWP5 병합 로직까지 전부 이 한 파일에 있습니다.
+ * Vercel의 Python 빌더가 로컬 서브패키지를 안정적으로 함께 묶어주지 않는
+ * 문제가 있어 의도적으로 한 파일로 합쳤습니다)를 내부적으로 호출해 처리합니다.
  *
  * 동작 방식: 첫 번째 파일의 컨테이너(스타일/폰트 등 DocInfo)를 그대로 두고,
  * 이후 파일들의 BodyText 섹션만 이어 붙인 뒤 섹션 개수를 패치합니다. 모든
@@ -52,7 +54,7 @@ export async function mergeHwpFiles(
   }
 
   const rawText = await res.text();
-  let json: { ok?: boolean; error?: string } = {};
+  let json: unknown = {};
   try {
     json = rawText ? JSON.parse(rawText) : {};
   } catch {
@@ -66,7 +68,18 @@ export async function mergeHwpFiles(
     );
   }
 
-  if (!res.ok || !json.ok) {
-    throw new Error(json.error ?? `HWP 병합 함수 호출에 실패했습니다 (HTTP ${res.status}).`);
+  const ok = typeof json === "object" && json !== null && (json as { ok?: unknown }).ok === true;
+  if (!res.ok || !ok) {
+    const rawError = typeof json === "object" && json !== null ? (json as { error?: unknown }).error : undefined;
+    // Vercel이 함수 크래시/타임아웃 시 자체적으로 { error: { code, message } }
+    // 같은 객체 형태 에러를 돌려줄 수 있어, 문자열이 아니면 그대로 new Error에
+    // 넘기지 않고 JSON으로 펼쳐서 보여줍니다 ("[object Object]"로 뭉개지는 것을 방지).
+    const errorText =
+      typeof rawError === "string"
+        ? rawError
+        : rawError !== undefined
+          ? JSON.stringify(rawError)
+          : `HWP 병합 함수 호출에 실패했습니다 (HTTP ${res.status}).`;
+    throw new Error(errorText);
   }
 }

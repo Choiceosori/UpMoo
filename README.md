@@ -57,9 +57,10 @@ src/
     excel/mergeExpense.ts                 # 기존 데이터 하단에 Append 병합
     mergeHwp.ts                           # api/hwp_merge.py(Python 함수) 호출 브리지
 api/
-  hwp_merge.py                            # Vercel Python 함수: HWP 병합 진입점
-  _hwplib/cfb.py                          # OLE2 Compound File 라이터(직접 구현)
-  _hwplib/merge.py                        # HWP5 BodyText 섹션 병합 + DocInfo 패치
+  hwp_merge.py                            # Vercel Python 함수: OLE2 Compound File 라이터 +
+                                           # HWP5 BodyText 섹션 병합 + 진입점이 모두 한 파일에
+                                           # 있습니다(아래 "알려진 한계" 참고 — 의도적으로 로컬
+                                           # 서브패키지 없이 단일 파일로 구성)
 requirements.txt                          # api/hwp_merge.py용 Python 의존성(olefile)
 db/schema.sql                             # Postgres 테이블 생성 스크립트
 ```
@@ -159,7 +160,7 @@ npm run dev
 - **HWP 통합 다운로드 (실험적)**: `api/hwp_merge.py`(Vercel Python 함수)가 각 파일의
   BodyText 섹션을 이어 붙이고 DocInfo의 섹션 개수를 패치해 하나의 .hwp로 병합합니다. HWP5는
   한컴의 독점 바이너리(OLE2 Compound File) 포맷이라 공개된 파서/라이터 라이브러리가 없어서,
-  이 프로젝트는 OLE2 컨테이너 자체를 직접 구현한 라이터(`api/_hwplib/cfb.py`)로 처리합니다 —
+  이 프로젝트는 OLE2 컨테이너 자체를 직접 구현한 라이터(`api/hwp_merge.py` 안에 있음)로 처리합니다 —
   `olefile`로 구조적 정합성은 충분히 검증했지만, **실제 한글(HWP) 프로그램으로는 검증하지
   못했습니다.** 모든 제출 파일이 같은 예시 양식에서 비롯된 경우(이 앱의 기본 흐름)에 안전할
   가능성이 높지만, 사용 전 반드시 실제 한글에서 열어 확인하세요. 컨테이너 크기가 약 7MB를
@@ -205,7 +206,7 @@ npm run dev
 ## 알려진 한계 (스캐폴드 범위)
 
 - **HWP 통합 병합은 검증되지 않은 실험적 기능입니다.** HWP5 바이너리 포맷(OLE2 Compound
-  File)을 다루는 공개 라이브러리가 없어, `api/_hwplib/cfb.py`가 OLE2 컨테이너 자체를
+  File)을 다루는 공개 라이브러리가 없어, `api/hwp_merge.py`가 OLE2 컨테이너 자체를
   직접 구현합니다. `olefile`로 구조적 정합성(섹터/FAT/디렉터리 트리)은 충분히 테스트했지만,
   DocInfo의 DocumentProperties 레코드 레이아웃 등 HWP5 세부 사양에 대한 이해가 실제
   한글 프로그램으로 한 번도 검증되지 않았습니다. 사용 전 반드시 실제 결과물을 한글에서
@@ -225,12 +226,14 @@ npm run dev
   에러를 냈습니다 — AWS SDK 없이 presigned URL만 주고받는 지금 방식이 훨씬 가볍고
   안정적입니다.) 두 함수 사이의 호출 바디에는 URL 목록처럼 작은 JSON만 오가므로 4.5MB
   한도에 걸리지 않습니다.
-  또한 `api/_hwplib/`는 `api/hwp_merge.py`가 import하는 로컬 서브패키지인데, Vercel의
-  Python 빌더가 이런 로컬 서브패키지를 자동으로 함수에 함께 포함시켜주지 않을 수 있어
-  (명시 설정 없이는 `ModuleNotFoundError`로 매 요청마다 500이 나는 문제가 있었습니다),
-  `vercel.json`에 `functions["api/hwp_merge.py"].includeFiles`로 `api/_hwplib/**`를
-  명시적으로 포함시켰습니다. 혹시 이 함수를 수정/이동하게 되면 `vercel.json`도 같이
-  맞춰주세요 — 안 그러면 조용히 같은 증상(모든 요청이 500)으로 되돌아갑니다.
+  또한 `api/hwp_merge.py`는 CFB 라이터와 HWP5 병합 로직까지 전부 한 파일에 담고 있습니다
+  (로컬 서브패키지로 분리했던 `api/_hwplib/`는 제거했습니다). 처음엔 그걸 서브패키지로
+  분리해두고 `vercel.json`의 `functions.includeFiles`로 함께 포함시키게 했는데도,
+  배포된 함수가 그 서브패키지를 못 찾아 매 요청마다(GET이든 POST든) 원인을 알 수 없는
+  500으로 죽는 문제가 반복됐습니다. Vercel의 Python 빌더가 로컬 서브패키지를 안정적으로
+  함께 묶어준다고 확신할 수 없어서, 그 불확실성 자체를 없애려고 "이 디렉터리의 .py 파일
+  하나 = 함수 하나"라는 가장 단순하고 확실한 규칙만 쓰도록 전부 한 파일로 합쳤습니다. 혹시
+  이 함수를 다시 여러 파일로 나누게 되면 이 문제가 재발할 수 있다는 점을 염두에 두세요.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.

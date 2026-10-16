@@ -1,7 +1,0 @@
-{
-  "functions": {
-    "api/hwp_merge.py": {
-      "includeFiles": "api/_hwplib/**"
-    }
-  }
-}
