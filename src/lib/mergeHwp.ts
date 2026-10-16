@@ -30,6 +30,9 @@ export interface HwpMergeInput {
   url: string;
 }
 
+const SERVICE_UNAVAILABLE_MESSAGE =
+  "HWP 통합 서비스에 연결할 수 없습니다. 담당자 PC가 꺼져 있을 수 있습니다 — 평일 9시~16시에 다시 시도해주세요.";
+
 export async function mergeHwpFiles(
   inputs: HwpMergeInput[],
   resultUploadUrl: string,
@@ -53,6 +56,13 @@ export async function mergeHwpFiles(
       }),
     });
   } catch (err) {
+    // Windows 병합 서비스는 사용자 PC가 꺼져 있으면 연결 자체가 실패합니다
+    // (ECONNREFUSED/타임아웃/DNS 실패 등). 기술적인 메시지 대신 사용자가
+    // 바로 이해할 수 있는 안내를 보여줍니다. Vercel Python 폴백은 그런
+    // "PC가 꺼져 있다"는 개념이 없으므로 기존 기술 메시지를 유지합니다.
+    if (serviceUrl) {
+      throw new Error(SERVICE_UNAVAILABLE_MESSAGE);
+    }
     throw new Error(
       `HWP 병합 함수(${endpoint})에 연결하지 못했습니다: ${
         err instanceof Error ? err.message : String(err)
@@ -65,14 +75,18 @@ export async function mergeHwpFiles(
   try {
     json = rawText ? JSON.parse(rawText) : {};
   } catch {
-    // JSON이 아닌 응답(예: 병합 백엔드가 아예 크래시했거나, Windows 서비스가
-    // 꺼져 있어 터널/프록시가 자체 에러 페이지를 돌려준 경우)인 경우 원인을
-    // 알 수 있도록 상태 코드와 응답 앞부분을 그대로 노출합니다.
+    // JSON이 아닌 응답은 보통 병합 백엔드 자체가 크래시했거나(Vercel 폴백),
+    // Windows 서비스가 꺼져 있어 Cloudflare Tunnel 등 터널/프록시가 origin에
+    // 연결하지 못했을 때 자체 에러 페이지(HTML)를 돌려주는 경우입니다 — 이건
+    // fetch() 자체는 성공(연결은 됨)하고 상태 코드/본문만 비정상이라 위
+    // catch(err)에서는 안 걸러집니다. Windows 서비스 쪽은 사용자가 바로
+    // 이해할 수 있는 안내로 바꿔 보여줍니다.
+    if (serviceUrl) {
+      throw new Error(SERVICE_UNAVAILABLE_MESSAGE);
+    }
     throw new Error(
       `HWP 병합 함수가 올바르지 않은 응답을 반환했습니다 (HTTP ${res.status}). ` +
-        (serviceUrl
-          ? `HWP_MERGE_SERVICE_URL(${serviceUrl})의 Windows 병합 서비스가 켜져 있는지 확인하세요. `
-          : `api/hwp_merge.py가 Vercel에 Python 함수로 배포됐는지, 함수 로그에 크래시가 있는지 확인하세요. `) +
+        `api/hwp_merge.py가 Vercel에 Python 함수로 배포됐는지, 함수 로그에 크래시가 있는지 확인하세요. ` +
         `응답 일부: ${rawText.slice(0, 200)}`
     );
   }
