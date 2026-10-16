@@ -79,6 +79,61 @@ def _pad(data: bytes, block: int) -> bytes:
     return data + b"\x00" * (block - len(data) % block)
 
 
+def _cfb_sibling_sort_key(name: str):
+    """MS-CFB 2.6.4: 형제 디렉터리 엔트리는 (1) 이름 길이 오름차순, (2) 길이가
+    같으면 대소문자 구분 없는 비교 순으로 정렬돼 있어야 합니다. 일반적인
+    문자열 정렬(알파벳순)과 달라서, 예를 들어 "BinData"(7자)가 "BodyText"
+    (8자)보다 항상 먼저 와야 합니다 — 단순 알파벳순이면 반대가 됩니다."""
+    return (len(name), name.upper())
+
+
+def _build_sibling_rb_tree(indices):
+    """주어진 형제 엔트리 인덱스 목록(이미 _cfb_sibling_sort_key 순으로 정렬됨)에
+    대해 실제로 유효한 레드-블랙 트리를 만듭니다("정렬된 배열로 균형 BST를
+    만들고, 깊이가 남는 마지막 레벨만 빨간색으로 칠하는" 표준 기법).
+
+    예전에는 모든 형제를 그냥 오른쪽 포인터로 한 줄로 잇고 전부 검은색으로
+    칠하는 "사실상 연결 리스트"를 썼는데, `olefile`처럼 관대한 리더는
+    문제없이 읽었지만 실제 한글 프로그램에서는 열리지 않고 "알 수 없는
+    바이너리라 텍스트로 열겠냐"는 복구 모드로 빠지는 문제가 있었습니다.
+    MS-CFB 스펙을 엄격히 검증하는 리더(레드-블랙 불변식: 빨간 노드의
+    자식은 항상 검은색이어야 하고, 루트에서 모든 NIL까지의 경로에 있는
+    검은 노드 수가 같아야 함)가 이 구조를 거부했을 가능성이 높아 보여서,
+    진짜 유효한 트리를 만들도록 고쳤습니다."""
+    left_map = {}
+    right_map = {}
+    depth_map = {}
+
+    def build(lo, hi, depth):
+        if lo >= hi:
+            return NOSTREAM
+        mid = (lo + hi) // 2
+        idx = indices[mid]
+        depth_map[idx] = depth
+        left_map[idx] = build(lo, mid, depth + 1)
+        right_map[idx] = build(mid + 1, hi, depth + 1)
+        return idx
+
+    root = build(0, len(indices), 0)
+
+    leaf_depths = [
+        i_depth
+        for i, i_depth in depth_map.items()
+        if left_map[i] == NOSTREAM and right_map[i] == NOSTREAM
+    ]
+    max_leaf_depth = max(leaf_depths) if leaf_depths else 0
+
+    color_map = {}
+    for idx in indices:
+        is_leaf = left_map[idx] == NOSTREAM and right_map[idx] == NOSTREAM
+        # 균형 분할 시 남는 마지막(가장 깊은) 레벨의 리프만 빨간색 —
+        # 이렇게 하면 그 노드는 블랙-높이 계산에서 빠지면서도 레드-블랙
+        # 불변식(빨간 노드의 자식은 검은색=NIL)을 항상 만족합니다.
+        color_map[idx] = 0 if (is_leaf and depth_map[idx] == max_leaf_depth) else 1
+
+    return root, left_map, right_map, color_map
+
+
 def write_cfb(streams: dict) -> bytes:
     tree = _build_tree(sorted(streams.keys()))
 
@@ -94,7 +149,7 @@ def write_cfb(streams: dict) -> bytes:
             "children": [],
         }
         entries.append(entry)
-        for child_name in sorted(node["__children__"].keys()):
+        for child_name in sorted(node["__children__"].keys(), key=_cfb_sibling_sort_key):
             child_idx = add_node(child_name, node["__children__"][child_name])
             entry["children"].append(child_idx)
         return idx
@@ -103,13 +158,16 @@ def write_cfb(streams: dict) -> bytes:
 
     for entry in entries:
         children = entry["children"]
-        entry["child"] = children[0] if children else NOSTREAM
-        for i, c in enumerate(children):
-            entries[c]["left"] = NOSTREAM
-            entries[c]["right"] = children[i + 1] if i + 1 < len(children) else NOSTREAM
+        root, left_map, right_map, color_map = _build_sibling_rb_tree(children)
+        entry["child"] = root
+        for c in children:
+            entries[c]["left"] = left_map[c]
+            entries[c]["right"] = right_map[c]
+            entries[c]["color"] = color_map[c]
 
     entries[0].setdefault("left", NOSTREAM)
     entries[0].setdefault("right", NOSTREAM)
+    entries[0].setdefault("color", 1)
 
     # ---- 1. 스트림을 "일반 FAT 사용(big)" / "미니스트림 사용(small)"으로 분류 ----
     minifat = []  # 미니섹터 인덱스 -> 다음 미니섹터 (또는 ENDOFCHAIN)
@@ -180,7 +238,7 @@ def write_cfb(streams: dict) -> bytes:
         name_field = name_utf16 + b"\x00" * (64 - len(name_utf16))
         name_len = len(name_utf16)
         obj_type = 5 if entry.get("is_root") else (1 if entry["is_storage"] else 2)
-        color = 1
+        color = entry.get("color", 1)
         left = entry.get("left", NOSTREAM)
         right = entry.get("right", NOSTREAM)
         child = entry.get("child", NOSTREAM)
