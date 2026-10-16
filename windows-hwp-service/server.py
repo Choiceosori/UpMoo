@@ -50,8 +50,8 @@ import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import comtypes
 import comtypes.client as client
-import pythoncom
 
 MERGE_SECRET = os.environ.get("MERGE_SECRET", "")
 PORT = int(os.environ.get("PORT", "8765"))
@@ -80,7 +80,7 @@ def merge_with_real_hwp(file_paths, output_path):
     """실제 한글 프로그램을 COM으로 띄워 file_paths를 순서대로 이어붙여
     output_path에 저장합니다. 로직은 사용자의 기존 Tkinter 수합 프로그램
     (HWPCombinerApp.combine_files)과 동일하며, GUI/대화상자만 제거했습니다."""
-    pythoncom.CoInitialize()
+    comtypes.CoInitialize()
     hwp = None
     try:
         hwp = client.CreateObject("HWPFrame.HwpObject")
@@ -114,7 +114,7 @@ def merge_with_real_hwp(file_paths, output_path):
                 hwp.Quit()
             except Exception:
                 pass
-        pythoncom.CoUninitialize()
+        comtypes.CoUninitialize()
 
 
 class Handler(BaseHTTPRequestHandler):
