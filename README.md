@@ -225,6 +225,12 @@ npm run dev
   에러를 냈습니다 — AWS SDK 없이 presigned URL만 주고받는 지금 방식이 훨씬 가볍고
   안정적입니다.) 두 함수 사이의 호출 바디에는 URL 목록처럼 작은 JSON만 오가므로 4.5MB
   한도에 걸리지 않습니다.
+  또한 `api/_hwplib/`는 `api/hwp_merge.py`가 import하는 로컬 서브패키지인데, Vercel의
+  Python 빌더가 이런 로컬 서브패키지를 자동으로 함수에 함께 포함시켜주지 않을 수 있어
+  (명시 설정 없이는 `ModuleNotFoundError`로 매 요청마다 500이 나는 문제가 있었습니다),
+  `vercel.json`에 `functions["api/hwp_merge.py"].includeFiles`로 `api/_hwplib/**`를
+  명시적으로 포함시켰습니다. 혹시 이 함수를 수정/이동하게 되면 `vercel.json`도 같이
+  맞춰주세요 — 안 그러면 조용히 같은 증상(모든 요청이 500)으로 되돌아갑니다.
 - PDF/HWP 파일의 개인정보 검출은 브라우저에서 완전한 파싱이 불가능해 best-effort 수준입니다.
   운영 환경에서는 서버 측에서 `pdf-parse`, HWP 파서 등을 붙여 정밀도를 높이는 것을 권장합니다.
 - Vercel 서버리스 함수의 기본 요청 본문 크기 제한(약 4.5MB)으로 인해 대용량 파일은 실패할 수 있습니다.

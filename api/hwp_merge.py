@@ -25,7 +25,20 @@ import traceback
 import urllib.request
 from http.server import BaseHTTPRequestHandler
 
-from _hwplib.merge import HwpMergeError, merge_hwp_files
+# _hwplib(api/_hwplib/*)는 이 함수와 같은 api/ 디렉터리의 서브패키지입니다.
+# Vercel의 Python 빌더가 이 서브패키지를 함께 묶지 않으면(예: vercel.json의
+# functions.includeFiles 설정이 없거나 틀린 경우) 아래 import가 매 요청마다
+# 실패해 handler 클래스 정의 자체가 동작하지 않고 메서드/페이로드와 무관하게
+# 무조건 500이 됩니다. try/except로 감싸서, 그런 경우에도 handler 클래스는
+# 정상적으로 떠서 최소한 원인을 알 수 있는 JSON 에러를 응답하게 합니다.
+try:
+    from _hwplib.merge import HwpMergeError, merge_hwp_files
+
+    _import_error = None
+except Exception as exc:  # noqa: BLE001
+    _import_error = exc
+    HwpMergeError = Exception
+    merge_hwp_files = None
 
 
 def _download(url: str) -> bytes:
@@ -50,6 +63,20 @@ class handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if _import_error is not None:
+            self._send_json(
+                500,
+                {
+                    "error": (
+                        "서버 모듈을 불러오지 못했습니다: "
+                        f"{type(_import_error).__name__}: {_import_error}. "
+                        "api/_hwplib가 이 Python 함수에 함께 배포되지 않았을 수 "
+                        "있습니다 (vercel.json의 functions.includeFiles 설정 확인)."
+                    )
+                },
+            )
+            return
+
         try:
             length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(length) if length > 0 else b"{}"
