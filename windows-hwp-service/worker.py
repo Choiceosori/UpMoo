@@ -39,6 +39,7 @@ Next.js 쪽이 이 폴링 방식 대신 예전 직접 호출 방식을 쓰려고
 """
 import json
 import os
+import shutil
 import tempfile
 import time
 import urllib.error
@@ -117,6 +118,11 @@ def merge_with_real_hwp(file_paths, output_path):
                 hwp.Quit()
             except Exception:
                 pass
+            # Quit() 호출이 반환되어도 한글 프로세스가 실제로 종료되고 입력
+            # 파일의 핸들을 놓기까지는 약간의 시간이 걸립니다 — 곧바로 임시
+            # 폴더를 정리하면 "다른 프로세스가 파일을 사용 중" 에러가 날 수
+            # 있어 여유를 둡니다.
+            time.sleep(1)
         comtypes.CoUninitialize()
 
 
@@ -148,17 +154,22 @@ def process_job(job: dict) -> None:
     upload_url = job["uploadUrl"]
     print(f"[{job_id}] 작업 시작 ({len(urls)}개 파일)")
 
+    # tempfile.TemporaryDirectory()의 with 블록 대신 mkdtemp()를 직접 쓰고
+    # 정리를 별도 finally에서 처리합니다 — 병합/업로드가 이미 끝난 뒤
+    # 임시 폴더 정리가 "파일이 사용 중" 등으로 실패하더라도(한글 프로세스
+    # 종료가 살짝 늦어지는 경우 등) 이미 성공한 작업이 실패로 보고되지
+    # 않게 하기 위함입니다.
+    tmp_dir = tempfile.mkdtemp(prefix="upmoo-hwp-")
     try:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            local_paths = []
-            for i, url in enumerate(urls):
-                p = os.path.join(tmp_dir, f"input_{i}.hwp")
-                _download(url, p)
-                local_paths.append(p)
+        local_paths = []
+        for i, url in enumerate(urls):
+            p = os.path.join(tmp_dir, f"input_{i}.hwp")
+            _download(url, p)
+            local_paths.append(p)
 
-            output_path = os.path.join(tmp_dir, "merged.hwp")
-            merge_with_real_hwp(local_paths, output_path)
-            _upload(upload_url, output_path)
+        output_path = os.path.join(tmp_dir, "merged.hwp")
+        merge_with_real_hwp(local_paths, output_path)
+        _upload(upload_url, output_path)
 
         report_complete(job_id, ok=True)
         print(f"[{job_id}] 완료")
@@ -168,6 +179,13 @@ def process_job(job: dict) -> None:
             report_complete(job_id, ok=False, error=str(exc))
         except Exception as report_exc:  # noqa: BLE001
             print(f"[{job_id}] 실패 보고도 실패: {report_exc}")
+    finally:
+        try:
+            shutil.rmtree(tmp_dir)
+        except OSError as exc:
+            # 작업 자체는 이미 끝났으니 실패로 보고하지 않고, 남은 임시
+            # 파일은 다음 번 OS 임시 폴더 정리 때 치워지도록 둡니다.
+            print(f"[{job_id}] 임시 폴더 정리 실패(무시): {exc}")
 
 
 def main():
