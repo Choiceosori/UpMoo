@@ -72,8 +72,61 @@ Windows에 로그인할 때 자동으로 워커가 떠 있도록 설정하세요
 
 이제 이 PC에 로그인할 때마다 워커 창이 자동으로 뜹니다. 평소에는 창을 최소화해두시면
 됩니다 — 닫으면 워커가 멈추니 닫지만 마세요. PC를 재부팅했다면 반드시 다시
-로그인해야 워커가 켜집니다(로그인 없이 자동으로 켜지게 하려면 작업 스케줄러로
-더 고급 설정이 필요한데, 필요하시면 말씀해주세요).
+로그인해야 워커가 켜집니다.
+
+## 더 안정적인 자동 실행 (작업 스케줄러, 선택)
+
+위 방법(시작프로그램 바로가기)은 간단하지만, 워커가 죽어도 자동으로 다시 켜지지
+않고, 매번 직접 로그인해야 합니다. `setup-scheduled-task.ps1`로 Windows **작업
+스케줄러**에 등록하면 죽어도 자동 재시작되고, 더 안정적으로 관리할 수 있습니다.
+
+1. `start-worker.bat`에 `APP_BASE_URL`/`MERGE_SECRET` 값을 먼저 채워두세요(위
+   "자동 실행 설정" 1~2번과 동일).
+2. 같은 폴더에 설정 스크립트를 받으세요:
+   ```
+   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Choiceosori/UpMoo/claude/school-task-collection-system-p22kf0/windows-hwp-service/setup-scheduled-task.ps1" -OutFile "C:\Users\USER\Desktop\setup-scheduled-task.ps1"
+   ```
+3. PowerShell을 **관리자 권한으로 실행**(시작 메뉴에서 PowerShell 우클릭 →
+   "관리자 권한으로 실행")한 뒤, 파일이 있는 폴더로 이동해서 실행:
+   ```
+   cd C:\Users\USER\Desktop
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   .\setup-scheduled-task.ps1
+   ```
+   "등록 완료 (로그인 시 시작 + 자동 재시작)" 메시지가 뜨면 성공입니다. 이제
+   시작프로그램 바로가기는 지워도 되고 그대로 둬도 됩니다(둘 다 있어도 워커가
+   두 번 뜨지는 않도록 `-MultipleInstances IgnoreNew`로 막아뒀습니다).
+
+### (실험적) 로그인 없이도 완전 무인 실행
+
+```
+.\setup-scheduled-task.ps1 -Unattended
+```
+
+이 모드는 PC가 켜지기만 하면 아무도 로그인하지 않아도 워커가 실행됩니다. 다만
+Windows의 **Session 0 격리** 때문에 한글 같은 GUI 자동화 프로그램이 이 모드에서
+정상 동작하지 않는 경우가 있습니다 — 반드시 직접 테스트해보세요:
+
+```
+Start-ScheduledTask -TaskName "UpMoo HWP Merge Worker"
+```
+
+실행 후 앱에서 "HWP 통합 다운로드"를 눌러보고, 보이는 창이 없으므로 결과는
+`worker.log` 파일(스크립트와 같은 폴더에 생성됨)로 확인하세요. 안 되면 일반
+모드로 다시 등록하면 됩니다:
+
+```
+.\setup-scheduled-task.ps1
+```
+
+### 등록된 작업 확인/삭제
+
+Windows 검색에서 "작업 스케줄러"를 열면 "UpMoo HWP Merge Worker"라는 이름으로
+보입니다. 삭제하려면:
+
+```
+Unregister-ScheduledTask -TaskName "UpMoo HWP Merge Worker" -Confirm:$false
+```
 
 ## Vercel에 연결하기
 
