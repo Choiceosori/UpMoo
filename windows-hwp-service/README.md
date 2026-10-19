@@ -52,6 +52,29 @@ python worker.py
 들어오면 화면에 로그가 찍히면서 한글 창이 잠깐 (숨김 상태로) 떴다가 사라지며
 병합이 진행됩니다.
 
+## 자동 실행 설정 (Windows 로그인 시 자동 시작, 권장)
+
+매번 PowerShell을 열어 수동으로 실행하는 건 번거롭고 깜빡하기 쉽습니다.
+Windows에 로그인할 때 자동으로 워커가 떠 있도록 설정하세요.
+
+1. `start-worker.bat` 파일을 `worker.py`와 **같은 폴더**에 받으세요:
+   ```
+   Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Choiceosori/UpMoo/claude/school-task-collection-system-p22kf0/windows-hwp-service/start-worker.bat" -OutFile "C:\Users\USER\Desktop\start-worker.bat"
+   ```
+2. `start-worker.bat`을 **메모장으로 열어서** `APP_BASE_URL`과 `MERGE_SECRET` 값을
+   본인 환경에 맞게 수정하고 저장하세요 (Vercel에 등록한 값과 동일해야 합니다).
+3. 더블클릭해서 정상적으로 뜨는지 먼저 확인하세요 (평소처럼 "HWP 병합 워커
+   시작..." 메시지가 뜨면 성공).
+4. Windows 시작 프로그램 폴더를 엽니다 — 키보드에서 `Win + R`을 누르고
+   `shell:startup`을 입력한 뒤 Enter.
+5. 열린 폴더에 `start-worker.bat`의 **바로가기**를 만들어 넣으세요 (`start-worker.bat`을
+   우클릭 → 복사 → 그 폴더에서 우클릭 → "바로 가기 붙여넣기").
+
+이제 이 PC에 로그인할 때마다 워커 창이 자동으로 뜹니다. 평소에는 창을 최소화해두시면
+됩니다 — 닫으면 워커가 멈추니 닫지만 마세요. PC를 재부팅했다면 반드시 다시
+로그인해야 워커가 켜집니다(로그인 없이 자동으로 켜지게 하려면 작업 스케줄러로
+더 고급 설정이 필요한데, 필요하시면 말씀해주세요).
+
 ## Vercel에 연결하기
 
 Vercel 프로젝트 환경변수에 동일한 비밀값을 등록하고 재배포하세요:
