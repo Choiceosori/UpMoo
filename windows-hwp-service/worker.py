@@ -87,7 +87,12 @@ def merge_with_real_hwp(file_paths, output_path):
     comtypes.CoInitialize()
     hwp = None
     try:
-        hwp = client.CreateObject("HWPFrame.HwpObject")
+        # dynamic=True: comtypes가 타입 라이브러리를 미리 분석해 정적 Python
+        # 래퍼 코드를 생성하는 대신, 호출 시점마다 바로 디스패치합니다. 그
+        # 정적 코드 생성 과정에서 한글 타입 라이브러리 안의 한국어 문자열을
+        # 이 PC의 시스템 로캘(코드페이지)로 디코딩하지 못해 깨지는 경우가
+        # 있어서(영어 로캘로 설정된 PC에서 흔함), 그 과정 자체를 건너뜁니다.
+        hwp = client.CreateObject("HWPFrame.HwpObject", dynamic=True)
         hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
         hwp.XHwpWindows.Item(0).Visible = False  # 한글 창 숨김
 
