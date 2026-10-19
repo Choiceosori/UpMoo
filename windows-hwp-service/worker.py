@@ -44,6 +44,17 @@ import time
 import urllib.error
 import urllib.request
 
+# 학교/회사 네트워크는 SSL 검사(인터셉션) 프록시를 두는 경우가 흔합니다 — 모든
+# HTTPS 트래픽을 자체 인증서로 다시 서명해서 가로채는 방식인데, 브라우저는
+# Windows가 그 인증서를 신뢰하도록 이미 설정되어 있어 정상으로 보이지만,
+# Python은 자체 인증서 목록(certifi)을 따로 쓰기 때문에 그 인증서를 몰라
+# "CERTIFICATE_VERIFY_FAILED"로 막힙니다. truststore는 Python의 ssl 모듈이
+# Windows 자체 인증서 저장소(이미 그 프록시 인증서를 신뢰함)를 그대로 쓰게
+# 해줘서, 인증서를 직접 찾아 설치할 필요 없이 바로 해결됩니다.
+import truststore
+
+truststore.inject_into_ssl()
+
 import comtypes
 import comtypes.client as client
 
