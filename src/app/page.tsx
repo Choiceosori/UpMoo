@@ -42,12 +42,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-50 to-slate-50 px-4 py-12">
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-50 px-4 py-12">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[32rem] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,rgba(79,70,229,0.12),transparent)]"
+      />
+
       <div className="mb-10 text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-bold text-white shadow-card">
+        <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl font-bold text-white shadow-glow">
           U
         </div>
-        <h1 className="text-3xl font-bold text-slate-900">UpMoo</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">UpMoo</h1>
         <p className="mt-2 text-slate-500">학교 업무 자료 수합 시스템</p>
       </div>
 
@@ -58,8 +63,8 @@ export default function HomePage() {
               type="button"
               onClick={() => setRole("manager")}
               className={clsx(
-                "flex-1 rounded-md py-2 transition-colors",
-                role === "manager" ? "bg-white text-brand-700 shadow" : "text-slate-500"
+                "flex-1 rounded-md py-2 transition-all duration-150",
+                role === "manager" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
               )}
             >
               업무 담당자
@@ -68,8 +73,8 @@ export default function HomePage() {
               type="button"
               onClick={() => setRole("submit")}
               className={clsx(
-                "flex-1 rounded-md py-2 transition-colors",
-                role === "submit" ? "bg-white text-brand-700 shadow" : "text-slate-500"
+                "flex-1 rounded-md py-2 transition-all duration-150",
+                role === "submit" ? "bg-white text-brand-700 shadow-sm" : "text-slate-500"
               )}
             >
               학급 담임(제출자)
@@ -103,7 +108,10 @@ export default function HomePage() {
         </div>
 
         <div className="text-center text-sm text-slate-400">
-          <Link href="/admin" className="font-medium text-slate-500 underline hover:text-brand-700">
+          <Link
+            href="/admin"
+            className="font-medium text-slate-500 underline decoration-slate-300 underline-offset-2 transition-colors duration-150 hover:text-brand-700 hover:decoration-brand-400"
+          >
             전체 관리자 페이지로 이동
           </Link>
         </div>

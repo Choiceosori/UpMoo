@@ -25,14 +25,14 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link href="/" className="flex items-center gap-2 font-bold text-brand-700">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
+    <header className="sticky top-0 z-40 border-b border-slate-200/70 bg-white/80 backdrop-blur-md">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
+        <Link href="/" className="flex items-center gap-2.5 font-bold tracking-tight text-slate-900">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white shadow-glow">
             U
           </span>
           <span>UpMoo</span>
-          <span className="text-sm font-normal text-slate-400">학교 업무 수합</span>
+          <span className="hidden text-sm font-normal text-slate-400 sm:inline">학교 업무 수합</span>
         </Link>
 
         <nav className="hidden gap-1 md:flex">
@@ -41,7 +41,7 @@ export function Navbar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                "rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150",
                 pathname === item.href
                   ? "bg-brand-50 text-brand-700"
                   : "text-slate-600 hover:bg-slate-100"
@@ -57,7 +57,7 @@ export function Navbar() {
             <div className="hidden text-right sm:block">
               <p className="font-semibold text-slate-700">
                 {schoolName}
-                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-500">
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
                   {role === "manager" ? "업무 담당자" : "학급 담임"}
                 </span>
               </p>
@@ -66,7 +66,7 @@ export function Navbar() {
           )}
           <button
             onClick={handleChangeSchool}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-500 hover:bg-slate-50"
+            className="rounded-md border border-slate-200 px-3 py-1.5 text-slate-500 transition-colors duration-150 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700"
           >
             학교/역할 변경
           </button>
